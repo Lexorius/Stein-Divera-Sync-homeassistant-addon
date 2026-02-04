@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#16213e;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="syncGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#03a9f4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4caf50;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="256" height="256" rx="40" fill="url(#bgGrad)"/>
+  
+  <!-- Sync arrows circle -->
+  <circle cx="128" cy="128" r="70" fill="none" stroke="url(#syncGrad)" stroke-width="8" stroke-dasharray="110 330" transform="rotate(-30 128 128)"/>
+  <circle cx="128" cy="128" r="70" fill="none" stroke="url(#syncGrad)" stroke-width="8" stroke-dasharray="110 330" transform="rotate(150 128 128)"/>
+  
+  <!-- Arrow heads -->
+  <polygon points="185,85 195,70 170,75" fill="#03a9f4"/>
+  <polygon points="71,171 61,186 86,181" fill="#4caf50"/>
+  
+  <!-- Center lightning bolt -->
+  <path d="M138 98 L118 128 L133 128 L118 158 L148 118 L133 118 Z" fill="#fff"/>
+  
+  <!-- Text -->
+  <text x="128" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#e8e8e8">SteinAPI</text>
+</svg>

@@ -1,0 +1,27 @@
+# Protect configuration files
+<FilesMatch "config\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Block access to sensitive files
+<FilesMatch "\.(sql|log|md)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Protect directories
+<IfModule mod_autoindex.c>
+    Options -Indexes
+</IfModule>
+
+# Enable rewrite engine
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Block access to config directory
+    RewriteRule ^config/ - [F,L]
+    
+    # Block access to src directory
+    RewriteRule ^src/ - [F,L]
+</IfModule>

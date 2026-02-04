@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SteinAPI Dashboard - Divera ↔ Stein.app Sync</title>
+    <style>
+        :root {
+            --primary-color: #03a9f4;
+            --primary-dark: #0288d1;
+            --success-color: #4caf50;
+            --warning-color: #ff9800;
+            --error-color: #f44336;
+            --bg-color: #1a1a2e;
+            --card-bg: #16213e;
+            --text-color: #e8e8e8;
+            --text-muted: #a0a0a0;
+            --border-color: #2a2a4a;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        
+        .logo h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .logo span {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: var(--card-bg);
+            border-radius: 25px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.warning { background: var(--warning-color); }
+        .status-dot.error { background: var(--error-color); }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 25px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        
+        .sync-panel {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 30px;
+        }
+        
+        .sync-panel h2 {
+            font-size: 20px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .sync-controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 25px;
+        }
+        
+        .sync-direction {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .direction-btn {
+            padding: 12px 24px;
+            border: 2px solid var(--border-color);
+            background: transparent;
+            color: var(--text-color);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+        
+        .direction-btn:hover {
+            border-color: var(--primary-color);
+        }
+        
+        .direction-btn.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(3, 169, 244, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background: var(--border-color);
+            border-radius: 3px;
+            overflow: hidden;
+            display: none;
+        }
+        
+        .progress-bar.active {
+            display: block;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+            border-radius: 3px;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+        
+        .field-config {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 30px;
+        }
+        
+        .field-config h2 {
+            font-size: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .field-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .field-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .field-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+        }
+        
+        .field-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--primary-color);
+        }
+        
+        .field-item label {
+            cursor: pointer;
+            flex: 1;
+        }
+        
+        .logs-panel {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .logs-panel h2 {
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logs-container {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+        }
+        
+        .log-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            gap: 15px;
+        }
+        
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .log-time {
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        
+        .log-level {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .log-level.info { background: rgba(3, 169, 244, 0.2); color: var(--primary-color); }
+        .log-level.success { background: rgba(76, 175, 80, 0.2); color: var(--success-color); }
+        .log-level.warning { background: rgba(255, 152, 0, 0.2); color: var(--warning-color); }
+        .log-level.error { background: rgba(244, 67, 54, 0.2); color: var(--error-color); }
+        
+        .log-message {
+            flex: 1;
+            word-break: break-word;
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 16px 24px;
+            border-radius: 10px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .toast.success { border-left: 4px solid var(--success-color); }
+        .toast.error { border-left: 4px solid var(--error-color); }
+        .toast.warning { border-left: 4px solid var(--warning-color); }
+        
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            .sync-controls {
+                flex-direction: column;
+            }
+            
+            .direction-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">⚡</div>
+                <div>
+                    <h1>SteinAPI</h1>
+                    <span>Divera24-7 ↔ Stein.app Synchronisation</span>
+                </div>
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Verbunden</span>
+            </div>
+        </header>
+        
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Letzte Sync</span>
+                    <div class="card-icon" style="background: rgba(3, 169, 244, 0.2);">🔄</div>
+                </div>
+                <div class="stat-value" id="lastSyncTime">--:--</div>
+                <div class="stat-label" id="lastSyncDate">Noch keine Synchronisation</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Synchronisiert</span>
+                    <div class="card-icon" style="background: rgba(76, 175, 80, 0.2);">✓</div>
+                </div>
+                <div class="stat-value" id="syncedCount">0</div>
+                <div class="stat-label">Einträge heute</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Fehler</span>
+                    <div class="card-icon" style="background: rgba(244, 67, 54, 0.2);">⚠</div>
+                </div>
+                <div class="stat-value" id="errorCount">0</div>
+                <div class="stat-label">In den letzten 24h</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Nächste Auto-Sync</span>
+                    <div class="card-icon" style="background: rgba(255, 152, 0, 0.2);">⏰</div>
+                </div>
+                <div class="stat-value" id="nextSyncTime">--:--</div>
+                <div class="stat-label" id="autoSyncStatus">Auto-Sync aktiv</div>
+            </div>
+        </div>
+        
+        <div class="sync-panel">
+            <h2>🔄 Manuelle Synchronisation</h2>
+            <div class="sync-controls">
+                <div class="sync-direction">
+                    <button class="direction-btn active" data-direction="both">
+                        ↔ Beide Richtungen
+                    </button>
+                    <button class="direction-btn" data-direction="divera_to_stein">
+                        → Divera zu Stein
+                    </button>
+                    <button class="direction-btn" data-direction="stein_to_divera">
+                        ← Stein zu Divera
+                    </button>
+                </div>
+                <button class="btn btn-primary" id="syncBtn" onclick="startSync()">
+                    <span>⚡</span> Jetzt synchronisieren
+                </button>
+            </div>
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+        
+        <div class="field-config">
+            <h2>⚙️ Feld-Konfiguration</h2>
+            <div class="field-grid" id="fieldGrid">
+                <!-- Wird dynamisch gefüllt -->
+            </div>
+        </div>
+        
+        <div class="logs-panel">
+            <div class="logs-header">
+                <h2>📋 Aktivitätslog</h2>
+                <button class="btn" style="background: transparent; border: 1px solid var(--border-color);" onclick="loadLogs()">
+                    Aktualisieren
+                </button>
+            </div>
+            <div class="logs-container" id="logsContainer">
+                <!-- Wird dynamisch gefüllt -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast"></div>
+    
+    <script>
+        // Basis-URL für API-Aufrufe (Ingress-kompatibel)
+        const BASE_URL = window.location.pathname.replace(/\/$/, '');
+        
+        let selectedDirection = 'both';
+        let refreshInterval;
+        
+        // Initialisierung
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadFieldConfig();
+            loadLogs();
+            
+            // Auto-Refresh alle 30 Sekunden
+            refreshInterval = setInterval(() => {
+                loadStats();
+                loadLogs();
+            }, 30000);
+            
+            // Direction Buttons
+            document.querySelectorAll('.direction-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.direction-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedDirection = btn.dataset.direction;
+                });
+            });
+        });
+        
+        async function apiCall(action, method = 'GET', data = null) {
+            const url = `${BASE_URL}/api.php?action=${action}`;
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            };
+            
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+            
+            try {
+                const response = await fetch(url, options);
+                return await response.json();
+            } catch (error) {
+                console.error('API Error:', error);
+                showToast('API-Fehler: ' + error.message, 'error');
+                return null;
+            }
+        }
+        
+        async function loadStats() {
+            const data = await apiCall('stats');
+            if (data && data.success) {
+                const stats = data.data;
+                
+                // Letzte Sync
+                if (stats.last_sync) {
+                    const lastSync = new Date(stats.last_sync);
+                    document.getElementById('lastSyncTime').textContent = 
+                        lastSync.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                    document.getElementById('lastSyncDate').textContent = 
+                        lastSync.toLocaleDateString('de-DE');
+                }
+                
+                // Sync Count
+                document.getElementById('syncedCount').textContent = stats.synced_today || 0;
+                
+                // Errors
+                document.getElementById('errorCount').textContent = stats.errors_24h || 0;
+                
+                // Status
+                const statusDot = document.getElementById('statusDot');
+                const statusText = document.getElementById('statusText');
+                
+                if (stats.status === 'healthy') {
+                    statusDot.className = 'status-dot';
+                    statusText.textContent = 'Verbunden';
+                } else if (stats.status === 'warning') {
+                    statusDot.className = 'status-dot warning';
+                    statusText.textContent = 'Warnung';
+                } else {
+                    statusDot.className = 'status-dot error';
+                    statusText.textContent = 'Fehler';
+                }
+                
+                // Next Sync
+                if (stats.next_sync) {
+                    const nextSync = new Date(stats.next_sync);
+                    document.getElementById('nextSyncTime').textContent = 
+                        nextSync.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                }
+                
+                document.getElementById('autoSyncStatus').textContent = 
+                    stats.auto_sync_enabled ? 'Auto-Sync aktiv' : 'Auto-Sync deaktiviert';
+            }
+        }
+        
+        async function loadFieldConfig() {
+            const data = await apiCall('fieldConfig');
+            if (data && data.success) {
+                const fieldGrid = document.getElementById('fieldGrid');
+                fieldGrid.innerHTML = '';
+                
+                const fields = data.data.fields || {};
+                const fieldLabels = {
+                    name: 'Name',
+                    email: 'E-Mail',
+                    phone: 'Telefon',
+                    address: 'Adresse',
+                    status: 'Status',
+                    qualifications: 'Qualifikationen',
+                    group: 'Gruppe',
+                    rank: 'Rang',
+                    notes: 'Notizen'
+                };
+                
+                Object.entries(fields).forEach(([field, enabled]) => {
+                    const label = fieldLabels[field] || field;
+                    fieldGrid.innerHTML += `
+                        <div class="field-item">
+                            <input type="checkbox" id="field_${field}" 
+                                   ${enabled ? 'checked' : ''} 
+                                   onchange="updateField('${field}', this.checked)">
+                            <label for="field_${field}">${label}</label>
+                        </div>
+                    `;
+                });
+            }
+        }
+        
+        async function updateField(field, enabled) {
+            const data = await apiCall('updateField', 'POST', { field, enabled });
+            if (data && data.success) {
+                showToast(`Feld "${field}" ${enabled ? 'aktiviert' : 'deaktiviert'}`, 'success');
+            }
+        }
+        
+        async function loadLogs() {
+            const data = await apiCall('logs&limit=50');
+            if (data && data.success) {
+                const container = document.getElementById('logsContainer');
+                container.innerHTML = '';
+                
+                if (data.data.logs && data.data.logs.length > 0) {
+                    data.data.logs.forEach(log => {
+                        const time = new Date(log.timestamp);
+                        container.innerHTML += `
+                            <div class="log-entry">
+                                <span class="log-time">${time.toLocaleString('de-DE')}</span>
+                                <span class="log-level ${log.level}">${log.level}</span>
+                                <span class="log-message">${escapeHtml(log.message)}</span>
+                            </div>
+                        `;
+                    });
+                } else {
+                    container.innerHTML = '<div class="log-entry"><span class="log-message">Keine Logs vorhanden</span></div>';
+                }
+            }
+        }
+        
+        async function startSync() {
+            const btn = document.getElementById('syncBtn');
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Synchronisiere...';
+            progressBar.classList.add('active');
+            progressFill.style.width = '0%';
+            
+            // Simuliere Fortschritt
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) progress = 90;
+                progressFill.style.width = progress + '%';
+            }, 200);
+            
+            const data = await apiCall('sync', 'POST', { direction: selectedDirection });
+            
+            clearInterval(progressInterval);
+            progressFill.style.width = '100%';
+            
+            setTimeout(() => {
+                progressBar.classList.remove('active');
+                btn.disabled = false;
+                btn.innerHTML = '<span>⚡</span> Jetzt synchronisieren';
+                
+                if (data && data.success) {
+                    showToast('Synchronisation erfolgreich!', 'success');
+                    loadStats();
+                    loadLogs();
+                } else {
+                    showToast('Synchronisation fehlgeschlagen: ' + (data?.error || 'Unbekannter Fehler'), 'error');
+                }
+            }, 500);
+        }
+        
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type + ' show';
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

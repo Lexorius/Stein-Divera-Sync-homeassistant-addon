@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -e
+
+echo "============================================"
+echo "SteinAPI Home Assistant Add-on"
+echo "Version: 1.0.0"
+echo "============================================"
+
+# Führe Initialisierung aus
+/usr/local/bin/steinapi-init.sh
+
+# Starte supervisord
+echo "[INFO] Starte Services via Supervisord..."
+exec /usr/bin/supervisord -c /etc/supervisord.conf

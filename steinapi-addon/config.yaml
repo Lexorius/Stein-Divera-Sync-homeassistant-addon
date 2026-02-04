@@ -1,0 +1,84 @@
+---
+name: "SteinAPI - Divera Sync"
+description: "API + Dashboard für die Synchronisation zwischen Divera24-7 und Stein.app"
+version: "1.0.0"
+slug: "steinapi"
+url: "https://github.com/Lexorius/steinapi"
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+init: false
+ingress: true
+ingress_port: 8099
+ingress_stream: true
+panel_icon: "mdi:sync"
+panel_title: "SteinAPI"
+homeassistant_api: false
+host_network: false
+hassio_api: false
+
+# Optionen für die Konfiguration
+options:
+  # Webserver Port (intern)
+  port: 8099
+  
+  # Divera Konfiguration
+  divera_access_key: ""
+  divera_base_url: "https://app.divera247.com/api/v2"
+  
+  # Stein.app Konfiguration
+  stein_api_key: ""
+  stein_business_unit_id: ""
+  stein_base_url: "https://api.stein.app/v1"
+  
+  # Sync Einstellungen
+  sync_interval_minutes: 5
+  sync_direction: "both"
+  auto_sync_enabled: true
+  
+  # Erweiterte Einstellungen
+  log_level: "info"
+  max_log_entries: 1000
+  rate_limit_requests: 100
+  rate_limit_window_seconds: 60
+
+schema:
+  port: port
+  divera_access_key: str
+  divera_base_url: url
+  stein_api_key: str
+  stein_business_unit_id: str
+  stein_base_url: url
+  sync_interval_minutes: int(1,60)
+  sync_direction: list(both|divera_to_stein|stein_to_divera)
+  auto_sync_enabled: bool
+  log_level: list(debug|info|warning|error)
+  max_log_entries: int(100,10000)
+  rate_limit_requests: int(10,1000)
+  rate_limit_window_seconds: int(10,3600)
+
+# Ports die genutzt werden
+ports:
+  8099/tcp: null
+
+ports_description:
+  8099/tcp: "SteinAPI Webserver"
+
+# Map für persistente Daten
+map:
+  - addon_config:rw
+  - ssl:ro
+
+# Startup-Reihenfolge
+startup: services
+stage: stable
+
+# Watchdog für automatischen Neustart
+watchdog: "http://[HOST]:[PORT:8099]/api.php?action=health"
+
+# Backup-Konfiguration
+backup_exclude:
+  - "*.log"

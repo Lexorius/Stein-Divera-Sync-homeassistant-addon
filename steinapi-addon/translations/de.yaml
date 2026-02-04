@@ -1,0 +1,56 @@
+{
+  "configuration": {
+    "port": {
+      "name": "Port",
+      "description": "Interner Webserver-Port für das Dashboard"
+    },
+    "divera_access_key": {
+      "name": "Divera Access Key",
+      "description": "Der API Access Key aus Divera24-7 (unter Verwaltung → Schnittstellen → API-Zugriff)"
+    },
+    "divera_base_url": {
+      "name": "Divera API URL",
+      "description": "Die Basis-URL der Divera API (Standard: https://app.divera247.com/api/v2)"
+    },
+    "stein_api_key": {
+      "name": "Stein.app API Key",
+      "description": "Der API Key aus Stein.app"
+    },
+    "stein_business_unit_id": {
+      "name": "Stein Business Unit ID",
+      "description": "Die Business Unit ID aus Stein.app"
+    },
+    "stein_base_url": {
+      "name": "Stein.app API URL",
+      "description": "Die Basis-URL der Stein.app API (Standard: https://api.stein.app/v1)"
+    },
+    "sync_interval_minutes": {
+      "name": "Sync-Intervall (Minuten)",
+      "description": "Wie oft soll automatisch synchronisiert werden? (1-60 Minuten)"
+    },
+    "sync_direction": {
+      "name": "Sync-Richtung",
+      "description": "In welche Richtung sollen Daten synchronisiert werden?"
+    },
+    "auto_sync_enabled": {
+      "name": "Auto-Sync aktivieren",
+      "description": "Soll die automatische Synchronisation aktiviert sein?"
+    },
+    "log_level": {
+      "name": "Log-Level",
+      "description": "Detailgrad der Protokollierung (debug, info, warning, error)"
+    },
+    "max_log_entries": {
+      "name": "Max. Log-Einträge",
+      "description": "Maximale Anzahl der zu speichernden Log-Einträge"
+    },
+    "rate_limit_requests": {
+      "name": "Rate Limit (Anfragen)",
+      "description": "Maximale Anzahl von API-Anfragen pro Zeitfenster"
+    },
+    "rate_limit_window_seconds": {
+      "name": "Rate Limit Zeitfenster (Sekunden)",
+      "description": "Zeitfenster für das Rate Limiting"
+    }
+  }
+}

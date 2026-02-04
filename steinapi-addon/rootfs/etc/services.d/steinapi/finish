@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+echo "[INFO] SteinAPI Add-on wird heruntergefahren..."
+
+# Stoppe Services gracefully
+if [ -f /run/supervisord.pid ]; then
+    kill -TERM $(cat /run/supervisord.pid) 2>/dev/null || true
+fi
+
+# Warte kurz
+sleep 2
+
+echo "[INFO] Herunterfahren abgeschlossen"
