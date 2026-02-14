@@ -36,6 +36,10 @@
       "name": "Enable Auto-Sync",
       "description": "Should automatic synchronization be enabled?"
     },
+    "timezone": {
+      "name": "Timezone",
+      "description": "Timezone for the container (e.g. Europe/Berlin, Europe/London, America/New_York)"
+    },
     "log_level": {
       "name": "Log Level",
       "description": "Level of detail for logging (debug, info, warning, error)"
