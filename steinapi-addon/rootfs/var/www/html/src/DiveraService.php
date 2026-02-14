@@ -1,17 +1,33 @@
 <?php
 /**
  * DiveraService Class
- * Handles communication with Divera24-7 API
+ * Based on original working SteinAPI project: DiveraAPI.php
  * 
- * Divera API Dokumentation: https://api.divera247.com/
- * 
- * WICHTIG: Diese Integration synchronisiert FAHRZEUGE zwischen Divera und Stein.app
- * Die Zuordnung erfolgt über das KENNZEICHEN (muss in beiden Systemen identisch sein)
+ * WICHTIG: 
+ * - Endpoint: pull/vehicle-status (NICHT pull/all!)
+ * - Kennzeichen-Feld in Divera: 'number'
+ * - Kennzeichen-Feld in Stein: 'name'
  */
 
 class DiveraService {
     private $config;
     private $logger;
+    
+    // FMS Status Mapping - direkt aus dem Original!
+    const FMS_STEIN_MAP = [
+        // Divera FMS -> Stein Status
+        1 => 'semiready',
+        2 => 'ready',
+        3 => 'inuse',
+        4 => 'inuse',
+        6 => 'notready',
+        // Stein Status -> Divera FMS
+        'ready' => 2,
+        'semiready' => 1,
+        'notready' => 6,
+        'inuse' => 3,
+        'maint' => 6
+    ];
     
     public function __construct(array $config, Logger $logger) {
         $this->config = $config;
@@ -23,17 +39,12 @@ class DiveraService {
      */
     public function testConnection(): array {
         try {
-            $response = $this->request('GET', '/pull/all');
-            
-            $vehicleCount = 0;
-            if (isset($response['data']['cluster']['vehicle'])) {
-                $vehicleCount = count($response['data']['cluster']['vehicle']);
-            }
-            
+            $response = $this->request('GET', 'pull/vehicle-status');
+            $count = is_array($response['data'] ?? null) ? count($response['data']) : 0;
             return [
                 'success' => true,
                 'message' => 'Connection successful',
-                'vehicle_count' => $vehicleCount
+                'vehicle_count' => $count
             ];
         } catch (Exception $e) {
             return [
@@ -44,26 +55,33 @@ class DiveraService {
     }
     
     /**
-     * Hole alle Fahrzeuge aus Divera
-     * Die Zuordnung zu Stein.app erfolgt über das Kennzeichen!
+     * Hole Fahrzeugstatus aus Divera
+     * Original: getVehicleStatus()
+     * 
+     * WICHTIG: 
+     * - Verwendet 'pull/vehicle-status' Endpoint
+     * - Kennzeichen ist im Feld 'number' (nicht 'name'!)
+     * - Rückgabe ist direkt $response['data']
      */
-    public function getVehicles(): array {
-        $this->logger->info('Fetching vehicles from Divera');
+    public function getVehicleStatus(): array {
+        $this->logger->info('Fetching vehicle status from Divera (pull/vehicle-status)');
         
         try {
-            $response = $this->request('GET', '/pull/all');
-            $vehicles = [];
-            
-            if (isset($response['data']['cluster']['vehicle'])) {
-                foreach ($response['data']['cluster']['vehicle'] as $id => $vehicle) {
-                    $mapped = $this->mapVehicle($id, $vehicle);
-                    if ($mapped) {
-                        $vehicles[] = $mapped;
-                    }
-                }
-            }
+            $response = $this->request('GET', 'pull/vehicle-status');
+            $vehicles = $response['data'] ?? [];
             
             $this->logger->info('Fetched ' . count($vehicles) . ' vehicles from Divera');
+            
+            // Debug: Zeige alle Fahrzeuge mit ihren Kennzeichen
+            foreach ($vehicles as $v) {
+                $this->logger->debug('Divera vehicle', [
+                    'id' => $v['id'] ?? 'no-id',
+                    'number' => $v['number'] ?? 'no-number',  // DAS IST DAS KENNZEICHEN!
+                    'name' => $v['name'] ?? 'no-name',
+                    'fmsstatus' => $v['fmsstatus'] ?? 0
+                ]);
+            }
+            
             return $vehicles;
             
         } catch (Exception $e) {
@@ -73,243 +91,92 @@ class DiveraService {
     }
     
     /**
-     * Hole ein einzelnes Fahrzeug
+     * Alias für Kompatibilität
      */
-    public function getVehicle(string $id): ?array {
-        try {
-            $vehicles = $this->getVehicles();
-            foreach ($vehicles as $vehicle) {
-                if ($vehicle['id'] == $id) {
-                    return $vehicle;
-                }
-            }
-            return null;
-        } catch (Exception $e) {
-            $this->logger->error('Failed to fetch vehicle: ' . $e->getMessage());
-            return null;
-        }
+    public function getVehicles(): array {
+        return $this->getVehicleStatus();
     }
     
     /**
-     * Aktualisiere Fahrzeugstatus in Divera
+     * Setze Fahrzeugstatus in Divera
+     * Original: setVehicleStatus($vehicleId, $data)
      */
-    public function updateVehicleStatus(string $id, int $status): bool {
-        $this->logger->info('Updating vehicle status in Divera', ['id' => $id, 'status' => $status]);
+    public function setVehicleStatus(string $vehicleId, array $data): bool {
+        $this->logger->info('Setting vehicle status in Divera', [
+            'vehicleId' => $vehicleId,
+            'status' => $data['status'] ?? 'unknown'
+        ]);
         
         try {
-            // Divera verwendet FMS-Status (1-6)
-            $this->request('POST', '/v2/using-vehicle', [
-                'vehicle_id' => $id,
-                'status' => $status
-            ]);
+            $payload = [
+                'status' => self::FMS_STEIN_MAP[$data['status']] ?? 6,
+                'status_id' => self::FMS_STEIN_MAP[$data['status']] ?? 6
+            ];
+            
+            if (!empty($data['comment'])) {
+                $payload['status_note'] = str_replace("\n", " ", $data['comment']);
+            }
+            
+            $this->logger->debug('Divera setVehicleStatus payload', $payload);
+            
+            $this->request('POST', "using-vehicles/set-status/{$vehicleId}", $payload);
             return true;
+            
         } catch (Exception $e) {
-            $this->logger->error('Failed to update Divera vehicle status: ' . $e->getMessage());
+            $this->logger->error('Failed to set Divera vehicle status: ' . $e->getMessage());
             return false;
         }
     }
     
     /**
-     * Mappe Divera Fahrzeug zu internem Format
-     */
-    private function mapVehicle(string $id, array $data): ?array {
-        // Kennzeichen ist das wichtigste Feld für die Zuordnung!
-        $licensePlate = $data['name'] ?? '';
-        
-        // Wenn kein Kennzeichen vorhanden, überspringen
-        if (empty($licensePlate)) {
-            $this->logger->debug('Vehicle without license plate skipped', ['id' => $id]);
-            return null;
-        }
-        
-        // Normalisiere Kennzeichen (Leerzeichen und Bindestriche entfernen)
-        $normalizedPlate = $this->normalizeLicensePlate($licensePlate);
-        
-        return [
-            'id' => $id,
-            'license_plate' => $licensePlate,
-            'license_plate_normalized' => $normalizedPlate,
-            'name' => $data['shortname'] ?? $licensePlate,
-            'fullname' => $data['fullname'] ?? '',
-            'status' => $this->mapDiveraStatus($data['fmsstatus'] ?? 0),
-            'fms_status' => $data['fmsstatus'] ?? 0,
-            'group_id' => $data['group'] ?? null,
-            'issi' => $data['issi'] ?? '',
-            'note' => $data['note'] ?? '',
-            'color' => $data['color'] ?? '',
-            'icon' => $data['icon'] ?? '',
-            'ordering' => $data['ordering'] ?? 0,
-            'visible' => $data['visible'] ?? true,
-            'source' => 'divera'
-        ];
-    }
-    
-    /**
-     * Normalisiere Kennzeichen für Vergleich
-     * Entfernt Leerzeichen, Bindestriche und macht alles Großbuchstaben
-     */
-    private function normalizeLicensePlate(string $plate): string {
-        // Entferne Leerzeichen und Bindestriche
-        $normalized = preg_replace('/[\s\-]/', '', $plate);
-        // Großbuchstaben
-        return strtoupper($normalized);
-    }
-    
-    /**
-     * Mappe Divera FMS-Status zu Stein.app Status
-     * 
-     * Divera FMS Status:
-     * 0 = Nicht gesetzt
-     * 1 = Einsatzbereit auf Funk
-     * 2 = Einsatzbereit auf Wache
-     * 3 = Einsatz übernommen / Anfahrt
-     * 4 = Am Einsatzort
-     * 5 = Sprechwunsch
-     * 6 = Nicht einsatzbereit
-     * 
-     * Stein.app Status:
-     * - ready
-     * - notready
-     * - semiready
-     * - inuse
-     * - maint
-     */
-    private function mapDiveraStatus(int $fmsStatus): string {
-        switch ($fmsStatus) {
-            case 1:
-            case 2:
-                return 'ready';
-            case 3:
-            case 4:
-                return 'inuse';
-            case 5:
-                return 'semiready';
-            case 6:
-                return 'notready';
-            default:
-                return 'ready';
-        }
-    }
-    
-    /**
-     * Mappe Stein.app Status zurück zu Divera FMS-Status
-     */
-    public function mapSteinStatusToDivera(string $steinStatus): int {
-        switch ($steinStatus) {
-            case 'ready':
-                return 2; // Einsatzbereit auf Wache
-            case 'inuse':
-                return 3; // Einsatz übernommen
-            case 'semiready':
-                return 5; // Sprechwunsch (bedingt einsatzbereit)
-            case 'notready':
-            case 'maint':
-                return 6; // Nicht einsatzbereit
-            default:
-                return 2;
-        }
-    }
-    
-    /**
      * HTTP Request an Divera API
+     * Basiert auf Original makeRequest()
      */
     private function request(string $method, string $endpoint, array $data = null): array {
-        $url = rtrim($this->config['base_url'], '/') . $endpoint;
+        // Basis-URL + Endpoint
+        $url = rtrim($this->config['base_url'], '/') . '/' . ltrim($endpoint, '/');
         
-        // Add access key
-        $separator = strpos($url, '?') !== false ? '&' : '?';
-        $url .= $separator . 'accesskey=' . urlencode($this->config['access_key']);
+        // Access Key hinzufügen
+        if (strpos($url, '?') === false) {
+            $url .= '?accesskey=' . $this->config['access_key'];
+        } else {
+            $url .= '&accesskey=' . $this->config['access_key'];
+        }
         
-        // Debug: Log request details (ohne Access Key im Log)
-        $logUrl = preg_replace('/accesskey=[^&]+/', 'accesskey=***', $url);
-        $this->logger->debug('Divera API Request', [
+        $this->logger->debug('Divera API request', [
             'method' => $method,
-            'url' => $logUrl,
-            'endpoint' => $endpoint,
-            'base_url' => $this->config['base_url'],
-            'has_data' => $data !== null
+            'endpoint' => $endpoint
         ]);
         
-        $ch = curl_init();
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'Accept: application/json'
-            ]
-        ]);
-        
-        if ($method === 'POST' || $method === 'PUT') {
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-            if ($data !== null) {
-                $jsonData = json_encode($data);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
-                $this->logger->debug('Divera API Request Body', ['body' => $jsonData]);
-            }
+        if ($method === 'POST' && $data) {
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         }
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        $curlInfo = curl_getinfo($ch);
         curl_close($ch);
         
-        // Debug: Log response details
-        $this->logger->debug('Divera API Response', [
-            'http_code' => $httpCode,
-            'total_time' => $curlInfo['total_time'],
-            'response_length' => strlen($response),
-            'response_preview' => substr($response, 0, 500)
-        ]);
-        
         if ($error) {
-            $this->logger->error('Divera API CURL Error', [
-                'error' => $error,
-                'url' => $logUrl
-            ]);
-            throw new Exception('Divera API error: ' . $error);
+            throw new Exception("Divera API curl error: $error");
         }
         
-        if ($httpCode >= 400) {
-            $this->logger->error('Divera API HTTP Error', [
-                'http_code' => $httpCode,
-                'url' => $logUrl,
-                'response' => $response
-            ]);
-            throw new Exception('Divera API returned error code: ' . $httpCode . ' - Response: ' . substr($response, 0, 200));
+        if ($httpCode !== 200) {
+            throw new Exception("Divera API request failed with code $httpCode: $response");
         }
         
         $decoded = json_decode($response, true);
-        if ($decoded === null && $response !== 'null' && !empty($response)) {
-            $this->logger->error('Divera API Invalid JSON', [
-                'response' => substr($response, 0, 500)
-            ]);
-            throw new Exception('Invalid JSON response from Divera');
+        if ($decoded === null && !empty($response)) {
+            throw new Exception("Divera API invalid JSON response");
         }
         
         return $decoded ?? [];
-    }
-    
-    // ========================================
-    // Legacy-Methoden für Kompatibilität
-    // ========================================
-    
-    /**
-     * @deprecated Use getVehicles() instead
-     */
-    public function getMembers(): array {
-        $this->logger->warning('getMembers() is deprecated - this integration syncs VEHICLES, not members');
-        return [];
-    }
-    
-    /**
-     * @deprecated
-     */
-    public function updateMember(string $id, array $data): bool {
-        $this->logger->warning('updateMember() is deprecated');
-        return false;
     }
 }

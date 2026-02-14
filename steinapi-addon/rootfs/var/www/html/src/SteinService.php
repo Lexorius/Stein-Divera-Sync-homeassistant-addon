@@ -1,21 +1,19 @@
 <?php
 /**
  * SteinService Class
- * Handles communication with Stein.app API
+ * Based on original working SteinAPI project: SteinAPI.php
  * 
- * API Documentation: https://stein.app/api/api/doc/intro
- * OpenAPI Spec: https://stein.app/api/api/doc/api-doc.yaml
- * 
- * WICHTIG: Die Stein.app API synchronisiert ASSETS (Fahrzeuge, Anhänger, Geräte)
- * und NICHT Mitglieder/Helfer!
+ * WICHTIG:
+ * - Base URL: https://stein.app/api/api/ext
+ * - Kennzeichen-Feld in Stein: 'name' (NICHT 'label'!)
+ * - Rate Limiting: 3 Sekunden zwischen Anfragen (max 20/min)
  */
 
 class SteinService {
     private $config;
     private $logger;
-    
-    // Korrekte Base URL
-    private const BASE_URL = 'https://stein.app/api';
+    private $lastRequestTime = 0;
+    private $assets = [];  // Cache für Assets
     
     public function __construct(array $config, Logger $logger) {
         $this->config = $config;
@@ -23,63 +21,75 @@ class SteinService {
     }
     
     /**
-     * Teste die Verbindung zur Stein.app API
+     * Rate Limiting - 3 Sekunden zwischen Anfragen (Original)
+     */
+    private function rateLimit(): void {
+        $currentTime = microtime(true);
+        $elapsedTime = $currentTime - $this->lastRequestTime;
+        if ($elapsedTime < 3) {
+            $sleepTime = (int)((3 - $elapsedTime) * 1000000);
+            $this->logger->debug('Rate limiting - sleeping', ['microseconds' => $sleepTime]);
+            usleep($sleepTime);
+        }
+        $this->lastRequestTime = microtime(true);
+    }
+    
+    /**
+     * Teste die Verbindung zur Stein API
      */
     public function testConnection(): array {
-        $this->logger->info('Testing Stein.app connection', [
-            'base_url' => self::BASE_URL,
-            'bu_id' => $this->config['business_unit_id'],
-            'api_key_length' => strlen($this->config['api_key'] ?? '')
-        ]);
-        
         try {
-            // Teste zuerst userinfo Endpoint
-            $userInfo = $this->request('GET', '/api/ext/userinfo');
-            
-            // Dann teste BU Endpoint
-            $buId = $this->config['business_unit_id'];
-            $buInfo = $this->request('GET', '/api/ext/bu/' . $buId);
-            
+            $assets = $this->getAssets();
             return [
                 'success' => true,
                 'message' => 'Connection successful',
-                'base_url' => self::BASE_URL,
-                'user_info' => $userInfo,
-                'bu_info' => [
-                    'id' => $buInfo['id'] ?? null,
-                    'name' => $buInfo['name'] ?? null
-                ]
+                'asset_count' => count($assets)
             ];
         } catch (Exception $e) {
             return [
                 'success' => false,
-                'message' => $e->getMessage(),
-                'base_url' => self::BASE_URL,
-                'bu_id' => $this->config['business_unit_id']
+                'message' => $e->getMessage()
             ];
         }
     }
     
     /**
-     * Hole alle Assets (Fahrzeuge, Anhänger, etc.) eines Ortsverbands
+     * Hole alle Assets von Stein.app
+     * Original: getAssets()
+     * 
+     * WICHTIG:
+     * - Kennzeichen ist im Feld 'name' (NICHT 'label'!)
+     * - Ergebnis wird gecacht
      */
     public function getAssets(): array {
-        $buId = $this->config['business_unit_id'];
-        $this->logger->info('Fetching assets from Stein.app', ['bu_id' => $buId]);
+        // Nutze Cache wenn vorhanden
+        if (!empty($this->assets)) {
+            $this->logger->debug('Returning cached assets', ['count' => count($this->assets)]);
+            return $this->assets;
+        }
+        
+        $this->logger->info('Fetching assets from Stein.app');
         
         try {
-            // buIds muss als einfacher Parameter übergeben werden: ?buIds=21
-            $response = $this->request('GET', '/api/ext/assets/?buIds=' . urlencode($buId));
-            $assets = [];
+            $buId = $this->config['business_unit_id'];
+            $endpoint = "/assets/?buIds={$buId}";
             
-            if (is_array($response)) {
-                foreach ($response as $asset) {
-                    $assets[] = $this->mapAsset($asset);
-                }
+            $this->assets = $this->request('GET', $endpoint);
+            
+            $this->logger->info('Fetched ' . count($this->assets) . ' assets from Stein.app');
+            
+            // Debug: Zeige alle Assets mit ihren Namen (= Kennzeichen!)
+            foreach ($this->assets as $a) {
+                $this->logger->debug('Stein asset', [
+                    'id' => $a['id'] ?? 'no-id',
+                    'name' => $a['name'] ?? 'no-name',  // DAS IST DAS KENNZEICHEN!
+                    'label' => $a['label'] ?? 'no-label',
+                    'groupId' => $a['groupId'] ?? 'no-group',
+                    'status' => $a['status'] ?? 'no-status'
+                ]);
             }
             
-            $this->logger->info('Fetched ' . count($assets) . ' assets from Stein.app');
-            return $assets;
+            return $this->assets;
             
         } catch (Exception $e) {
             $this->logger->error('Failed to fetch Stein.app assets: ' . $e->getMessage());
@@ -88,240 +98,133 @@ class SteinService {
     }
     
     /**
-     * Hole ein einzelnes Asset
+     * Aktualisiere ein Asset in Stein.app
+     * Original: updateAsset($assetId, $updateData, $notify = false)
+     * 
+     * WICHTIG: Holt zuerst das komplette Asset, merged die Daten, dann PATCH
      */
-    public function getAsset(int $assetId): ?array {
-        try {
-            $response = $this->request('GET', '/api/ext/assets/' . $assetId);
-            return $this->mapAsset($response);
-        } catch (Exception $e) {
-            $this->logger->error('Failed to fetch asset: ' . $e->getMessage());
-            return null;
-        }
-    }
-    
-    /**
-     * Aktualisiere ein Asset
-     */
-    public function updateAsset(int $assetId, array $data): bool {
-        $this->logger->info('Updating asset in Stein.app', ['id' => $assetId]);
+    public function updateAsset(string $assetId, array $updateData, bool $notify = false): bool {
+        $this->logger->info('Updating asset in Stein.app', [
+            'assetId' => $assetId,
+            'updateData' => $updateData
+        ]);
         
         try {
-            $steinData = $this->mapToSteinFormat($data);
-            $this->request('PATCH', '/api/ext/assets/' . $assetId, $steinData);
+            // Hole alle Assets (aus Cache oder API)
+            $assets = $this->getAssets();
+            
+            // Finde das Asset
+            $assetData = null;
+            foreach ($assets as $asset) {
+                if ($asset['id'] == $assetId) {
+                    $assetData = $asset;
+                    break;
+                }
+            }
+            
+            if (!$assetData) {
+                $this->logger->error('Asset not found', ['assetId' => $assetId]);
+                return false;
+            }
+            
+            // Entferne 'id' aus updateData falls vorhanden
+            unset($updateData['id']);
+            
+            // Merge Daten - Original: $assetData = array_merge($assetData, $updateData);
+            $assetData = array_merge($assetData, $updateData);
+            
+            // Endpoint mit notify-Parameter
+            $endpoint = "/assets/{$assetId}?notifyRadio=" . ($notify ? 'true' : 'false');
+            
+            $this->logger->debug('Stein PATCH request', [
+                'endpoint' => $endpoint,
+                'payload' => $assetData
+            ]);
+            
+            $this->request('PATCH', $endpoint, $assetData);
+            
+            // Cache invalidieren
+            $this->assets = [];
+            
             return true;
+            
         } catch (Exception $e) {
-            $this->logger->error('Failed to update Stein.app asset: ' . $e->getMessage());
+            $this->logger->error("Failed to update asset $assetId: " . $e->getMessage());
             return false;
         }
     }
     
     /**
-     * Hole Ortsverband-Informationen
+     * Cache leeren
      */
-    public function getBu(): ?array {
-        $buId = $this->config['business_unit_id'];
-        
-        try {
-            return $this->request('GET', '/api/ext/bu/' . $buId);
-        } catch (Exception $e) {
-            $this->logger->error('Failed to fetch BU: ' . $e->getMessage());
-            return null;
-        }
+    public function clearCache(): void {
+        $this->assets = [];
+        $this->logger->debug('Asset cache cleared');
     }
     
     /**
-     * Hole User-Informationen (zum Testen der Authentifizierung)
-     */
-    public function getUserInfo(): ?array {
-        try {
-            return $this->request('GET', '/api/ext/userinfo');
-        } catch (Exception $e) {
-            $this->logger->error('Failed to fetch user info: ' . $e->getMessage());
-            return null;
-        }
-    }
-    
-    /**
-     * Mappe Stein Asset zu internem Format
-     */
-    private function mapAsset(array $data): array {
-        return [
-            'id' => $data['id'] ?? 0,
-            'bu_id' => $data['buId'] ?? 0,
-            'group_id' => $data['groupId'] ?? 0,
-            'label' => $data['label'] ?? '',
-            'name' => $data['name'] ?? '',
-            'status' => $data['status'] ?? 'ready',
-            'category' => $data['category'] ?? '',
-            'comment' => $data['comment'] ?? '',
-            'radio_name' => $data['radioName'] ?? '',
-            'issi' => $data['issi'] ?? '',
-            'sort_order' => $data['sortOrder'] ?? 0,
-            'operation_reservation' => $data['operationReservation'] ?? false,
-            'hu_valid_until' => $data['huValidUntil'] ?? null,
-            'last_modified' => $data['lastModified'] ?? null,
-            'last_modified_by' => $data['lastModifiedBy'] ?? null,
-            'created' => $data['created'] ?? null,
-            'deleted' => $data['deleted'] ?? false,
-            'source' => 'stein'
-        ];
-    }
-    
-    /**
-     * Mappe internes Format zu Stein Format
-     */
-    private function mapToSteinFormat(array $data): array {
-        $steinData = [];
-        
-        $mapping = [
-            'label' => 'label',
-            'name' => 'name',
-            'status' => 'status',
-            'category' => 'category',
-            'comment' => 'comment',
-            'radio_name' => 'radioName',
-            'issi' => 'issi',
-            'sort_order' => 'sortOrder',
-            'operation_reservation' => 'operationReservation',
-            'hu_valid_until' => 'huValidUntil'
-        ];
-        
-        foreach ($mapping as $internal => $stein) {
-            if (isset($data[$internal])) {
-                $steinData[$stein] = $data[$internal];
-            }
-        }
-        
-        return $steinData;
-    }
-    
-    /**
-     * HTTP Request an Stein.app API
+     * HTTP Request an Stein API
+     * Basiert auf Original makeRequest()
      */
     private function request(string $method, string $endpoint, array $data = null): array {
-        $url = self::BASE_URL . $endpoint;
+        // Rate Limiting anwenden
+        $this->rateLimit();
         
-        // Debug: Log request details
-        $this->logger->debug('Stein API Request', [
+        // URL zusammenbauen
+        // Original Base URL: https://stein.app/api/api/ext
+        $baseUrl = rtrim($this->config['base_url'], '/');
+        $url = $baseUrl . $endpoint;
+        
+        $this->logger->debug('Stein API request', [
             'method' => $method,
-            'url' => $url,
-            'endpoint' => $endpoint,
-            'has_data' => $data !== null
+            'url' => $url
         ]);
         
-        $ch = curl_init();
+        $ch = curl_init($url);
         
         $headers = [
-            'Content-Type: application/json',
+            'User-Agent: Mozilla/5.0',
             'Accept: application/json',
-            'Authorization: Bearer ' . $this->config['api_key']
+            'Authorization: Bearer ' . $this->config['api_key'],
+            'Content-Type: application/json'
         ];
         
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_FOLLOWLOCATION => true
-        ]);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         
-        if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-            if ($data !== null) {
-                $jsonData = json_encode($data);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
-                $this->logger->debug('Stein API Request Body', ['body' => $jsonData]);
+        if ($method === 'PATCH') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+            if ($data) {
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
             }
         }
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        $curlInfo = curl_getinfo($ch);
         curl_close($ch);
         
-        // Debug: Log response details
-        $this->logger->debug('Stein API Response', [
-            'http_code' => $httpCode,
-            'url' => $curlInfo['url'],
-            'total_time' => $curlInfo['total_time'],
-            'response_length' => strlen($response),
-            'response_preview' => substr($response, 0, 500)
+        $this->logger->debug('Stein API response', [
+            'httpCode' => $httpCode,
+            'responseLength' => strlen($response),
+            'responsePreview' => substr($response, 0, 300)
         ]);
         
         if ($error) {
-            $this->logger->error('Stein API CURL Error', [
-                'error' => $error,
-                'url' => $url
-            ]);
-            throw new Exception('Stein.app API error: ' . $error);
+            throw new Exception("Stein API curl error: $error");
         }
         
-        // Spezielle Behandlung für 404 (IP nicht aus Deutschland?)
-        if ($httpCode === 404) {
-            $this->logger->error('Stein API 404 Error - möglicherweise IP-Beschränkung', [
-                'url' => $url,
-                'response' => $response,
-                'hint' => 'Die Stein.app API ist auf deutsche IP-Adressen beschränkt!'
-            ]);
-            throw new Exception('Stein.app API 404: ' . $response . ' (Hinweis: API nur aus Deutschland erreichbar!)');
-        }
-        
-        if ($httpCode === 401) {
-            throw new Exception('Stein.app API 401 Unauthorized - API Key ungültig');
-        }
-        
-        if ($httpCode === 429) {
-            throw new Exception('Stein.app API 429 Too Many Requests - Rate Limit überschritten (max 20/min)');
-        }
-        
-        if ($httpCode >= 400) {
-            $this->logger->error('Stein API HTTP Error', [
-                'http_code' => $httpCode,
-                'url' => $url,
-                'response' => $response
-            ]);
-            throw new Exception('Stein.app API HTTP ' . $httpCode . ': ' . substr($response, 0, 200));
+        if ($httpCode !== 200) {
+            throw new Exception("Stein API request failed with code $httpCode: $response");
         }
         
         $decoded = json_decode($response, true);
-        if ($decoded === null && $response !== 'null' && !empty($response)) {
-            $this->logger->error('Stein API Invalid JSON', [
-                'response' => substr($response, 0, 500)
-            ]);
-            throw new Exception('Invalid JSON response from Stein.app');
+        if ($decoded === null && !empty($response)) {
+            throw new Exception("Stein API invalid JSON response");
         }
         
         return $decoded ?? [];
-    }
-    
-    // ========================================
-    // Legacy-Methoden für Kompatibilität
-    // (Stein.app hat keine Members API!)
-    // ========================================
-    
-    /**
-     * @deprecated Stein.app hat keine Members API - nur Assets!
-     */
-    public function getMembers(): array {
-        $this->logger->warning('getMembers() called but Stein.app only supports Assets (vehicles, equipment)');
-        return [];
-    }
-    
-    /**
-     * @deprecated Stein.app hat keine Members API
-     */
-    public function updateMember(string $id, array $data): bool {
-        $this->logger->warning('updateMember() called but Stein.app only supports Assets');
-        return false;
-    }
-    
-    /**
-     * @deprecated Stein.app hat keine Members API
-     */
-    public function createMember(array $data): ?string {
-        $this->logger->warning('createMember() called but Stein.app only supports Assets');
-        return null;
     }
 }
