@@ -404,7 +404,7 @@
                 <div class="logo-icon">⚡</div>
                 <div>
                     <h1>SteinAPI</h1>
-                    <span>Divera24-7 ↔ Stein.app Synchronisation</span>
+                    <span>Fahrzeug-Sync: Divera24-7 ↔ Stein.app</span>
                 </div>
             </div>
             <div class="status-indicator">
@@ -429,7 +429,7 @@
                     <div class="card-icon" style="background: rgba(76, 175, 80, 0.2);">✓</div>
                 </div>
                 <div class="stat-value" id="syncedCount">0</div>
-                <div class="stat-label">Einträge heute</div>
+                <div class="stat-label">Fahrzeuge heute</div>
             </div>
             
             <div class="card">
@@ -452,7 +452,10 @@
         </div>
         
         <div class="sync-panel">
-            <h2>🔄 Manuelle Synchronisation</h2>
+            <h2>🔄 Fahrzeug-Synchronisation</h2>
+            <p style="color: var(--text-muted); margin-bottom: 20px;">
+                Synchronisiert Fahrzeugstatus zwischen Divera24-7 und Stein.app basierend auf dem Kennzeichen.
+            </p>
             <div class="sync-controls">
                 <div class="sync-direction">
                     <button class="direction-btn active" data-direction="both">
@@ -475,7 +478,11 @@
         </div>
         
         <div class="field-config">
-            <h2>⚙️ Feld-Konfiguration</h2>
+            <h2>⚙️ Fahrzeug-Feld-Konfiguration</h2>
+            <p style="color: var(--text-muted); margin-bottom: 20px;">
+                Wähle aus, welche Felder zwischen Divera und Stein.app synchronisiert werden sollen.
+                <br><strong>Hinweis:</strong> Die Zuordnung erfolgt über das Kennzeichen (muss in beiden Systemen identisch sein).
+            </p>
             <div class="field-grid" id="fieldGrid">
                 <!-- Wird dynamisch gefüllt -->
             </div>
@@ -603,15 +610,11 @@
                 
                 const fields = data.data.fields || {};
                 const fieldLabels = {
-                    name: 'Name',
-                    email: 'E-Mail',
-                    phone: 'Telefon',
-                    address: 'Adresse',
-                    status: 'Status',
-                    qualifications: 'Qualifikationen',
-                    group: 'Gruppe',
-                    rank: 'Rang',
-                    notes: 'Notizen'
+                    status: 'Fahrzeugstatus',
+                    radio_name: 'Funkrufname / ISSI',
+                    comment: 'Kommentar / Notiz',
+                    category: 'Kategorie',
+                    name: 'Name / Beschreibung'
                 };
                 
                 Object.entries(fields).forEach(([field, enabled]) => {

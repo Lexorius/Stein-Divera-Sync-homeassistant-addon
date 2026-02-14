@@ -172,6 +172,169 @@ try {
             ], JSON_PRETTY_PRINT);
             break;
             
+        case 'compareData':
+            // Zeigt die Rohdaten beider APIs zum Vergleich
+            // WICHTIG: Divera Kennzeichen = 'number', Stein Kennzeichen = 'name'
+            try {
+                $diveraVehicles = $diveraService->getVehicles();
+                $steinAssets = $steinService->getAssets();
+                
+                // Hole erlaubte Gruppen aus Config
+                $allowedGroups = $config['sync']['stein_group_ids'] ?? [1, 5];
+                
+                // Erstelle Übersicht
+                $comparison = [
+                    'divera_vehicles' => [],
+                    'stein_assets' => [],
+                    'potential_matches' => [],
+                    'config' => [
+                        'divera_field' => 'number (Kennzeichen)',
+                        'stein_field' => 'name (Kennzeichen)',
+                        'allowed_groups' => $allowedGroups
+                    ]
+                ];
+                
+                // Divera Fahrzeuge - Kennzeichen ist 'number'!
+                foreach ($diveraVehicles as $v) {
+                    $comparison['divera_vehicles'][] = [
+                        'id' => $v['id'] ?? 'no-id',
+                        'number' => $v['number'] ?? '',  // DAS IST DAS KENNZEICHEN!
+                        'name' => $v['name'] ?? '',
+                        'fmsstatus' => $v['fmsstatus'] ?? 0,
+                        'fmsstatus_note' => $v['fmsstatus_note'] ?? ''
+                    ];
+                }
+                
+                // Stein Assets - Kennzeichen ist 'name'!, nur erlaubte Gruppen
+                foreach ($steinAssets as $a) {
+                    $groupId = $a['groupId'] ?? 0;
+                    $isAllowed = in_array($groupId, $allowedGroups);
+                    
+                    $comparison['stein_assets'][] = [
+                        'id' => $a['id'] ?? 'no-id',
+                        'name' => $a['name'] ?? '',  // DAS IST DAS KENNZEICHEN!
+                        'label' => $a['label'] ?? '',
+                        'groupId' => $groupId,
+                        'in_allowed_groups' => $isAllowed,
+                        'status' => $a['status'] ?? '',
+                        'comment' => $a['comment'] ?? ''
+                    ];
+                }
+                
+                // Finde potentielle Matches (Stein 'name' === Divera 'number')
+                foreach ($comparison['divera_vehicles'] as $dv) {
+                    foreach ($comparison['stein_assets'] as $sa) {
+                        // Nur Matches in erlaubten Gruppen
+                        if (!$sa['in_allowed_groups']) continue;
+                        
+                        // Vergleich: Stein 'name' === Divera 'number'
+                        if (!empty($dv['number']) && !empty($sa['name']) && $dv['number'] === $sa['name']) {
+                            $comparison['potential_matches'][] = [
+                                'divera_id' => $dv['id'],
+                                'stein_id' => $sa['id'],
+                                'matched_key' => $dv['number'],
+                                'divera_number' => $dv['number'],
+                                'stein_name' => $sa['name'],
+                                'divera_status' => $dv['fmsstatus'],
+                                'stein_status' => $sa['status']
+                            ];
+                        }
+                    }
+                }
+                
+                echo json_encode([
+                    'success' => true,
+                    'summary' => [
+                        'divera_count' => count($comparison['divera_vehicles']),
+                        'stein_count' => count($comparison['stein_assets']),
+                        'stein_in_allowed_groups' => count(array_filter($comparison['stein_assets'], fn($a) => $a['in_allowed_groups'])),
+                        'matches_found' => count($comparison['potential_matches'])
+                    ],
+                    'data' => $comparison
+                ], JSON_PRETTY_PRINT);
+            } catch (Exception $e) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ], JSON_PRETTY_PRINT);
+            }
+            break;
+            
+        case 'rawDivera':
+            // Zeigt RAW Divera API Response
+            // WICHTIG: Verwendet pull/vehicle-status, Kennzeichen ist 'number'!
+            try {
+                $url = rtrim($config['divera']['base_url'], '/') . '/pull/vehicle-status';
+                $url .= '?accesskey=' . urlencode($config['divera']['access_key']);
+                
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $url,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => 30
+                ]);
+                $response = curl_exec($ch);
+                curl_close($ch);
+                
+                $data = json_decode($response, true);
+                
+                // pull/vehicle-status gibt Fahrzeuge direkt in data zurück
+                // Kennzeichen ist im Feld 'number'!
+                $vehicles = $data['data'] ?? [];
+                
+                echo json_encode([
+                    'success' => true,
+                    'info' => 'RAW Divera vehicle-status data. WICHTIG: Kennzeichen ist Feld "number"!',
+                    'endpoint' => 'pull/vehicle-status',
+                    'vehicle_count' => count($vehicles),
+                    'first_vehicle_structure' => !empty($vehicles) ? $vehicles[0] : null,
+                    'all_vehicles' => $vehicles
+                ], JSON_PRETTY_PRINT);
+            } catch (Exception $e) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ], JSON_PRETTY_PRINT);
+            }
+            break;
+            
+        case 'rawStein':
+            // Zeigt RAW Stein API Response
+            try {
+                $buId = $config['stein']['business_unit_id'];
+                $url = 'https://stein.app/api/api/ext/assets/?buIds=' . urlencode($buId);
+                
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $url,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => 30,
+                    CURLOPT_HTTPHEADER => [
+                        'Authorization: Bearer ' . $config['stein']['api_key'],
+                        'Accept: application/json'
+                    ]
+                ]);
+                $response = curl_exec($ch);
+                curl_close($ch);
+                
+                $data = json_decode($response, true);
+                
+                echo json_encode([
+                    'success' => true,
+                    'info' => 'RAW Stein.app asset data. WICHTIG: Kennzeichen ist Feld "name"!',
+                    'endpoint' => '/assets/?buIds=' . $buId,
+                    'asset_count' => is_array($data) ? count($data) : 0,
+                    'first_asset_structure' => is_array($data) && !empty($data) ? $data[0] : null,
+                    'all_assets' => $data
+                ], JSON_PRETTY_PRINT);
+            } catch (Exception $e) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ], JSON_PRETTY_PRINT);
+            }
+            break;
+            
         case 'testSteinRaw':
             // Raw test für Stein API - zeigt genau was passiert
             $testUrl = $config['stein']['base_url'];

@@ -48,17 +48,13 @@ CREATE TABLE IF NOT EXISTS field_config (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Insert default field configuration
+-- Insert default field configuration for VEHICLES
 INSERT INTO field_config (id, config) VALUES (1, '{
-    "name": true,
-    "email": true,
-    "phone": true,
-    "address": true,
     "status": true,
-    "qualifications": true,
-    "group": false,
-    "rank": false,
-    "notes": false
+    "radio_name": true,
+    "comment": false,
+    "category": false,
+    "name": false
 }') ON DUPLICATE KEY UPDATE id = id;
 
 -- Settings Table
