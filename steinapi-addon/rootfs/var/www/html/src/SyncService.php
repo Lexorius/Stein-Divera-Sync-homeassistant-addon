@@ -1,7 +1,13 @@
 <?php
 /**
  * SyncService Class
- * Handles synchronization between Divera and Stein.app
+ * Handles synchronization of VEHICLES/ASSETS between Divera and Stein.app
+ * 
+ * WICHTIG: Die Zuordnung erfolgt über das KENNZEICHEN!
+ * Das Kennzeichen muss in beiden Systemen identisch sein.
+ * 
+ * Stein.app = Assets (Fahrzeuge, Anhänger, Geräte)
+ * Divera = Vehicles (Fahrzeuge)
  */
 
 class SyncService {
@@ -25,8 +31,11 @@ class SyncService {
         $this->config = $config;
     }
     
+    /**
+     * Starte die Synchronisation
+     */
     public function sync(string $direction = 'both', string $source = 'manual'): array {
-        $this->logger->info("Starting sync ($direction) from $source");
+        $this->logger->info("Starting vehicle sync ($direction) from $source");
         
         $stats = [
             'direction' => $direction,
@@ -35,27 +44,41 @@ class SyncService {
             'synced' => 0,
             'created' => 0,
             'updated' => 0,
-            'errors' => 0
+            'skipped' => 0,
+            'errors' => 0,
+            'details' => []
         ];
         
         try {
-            // Get enabled fields
-            $fields = $this->getFieldConfig();
+            // Hole Fahrzeuge aus beiden Systemen
+            $diveraVehicles = $this->divera->getVehicles();
+            $steinAssets = $this->stein->getAssets();
+            
+            $this->logger->info('Fetched vehicles', [
+                'divera_count' => count($diveraVehicles),
+                'stein_count' => count($steinAssets)
+            ]);
+            
+            // Erstelle Index nach normalisiertem Kennzeichen
+            $diveraIndex = $this->indexByLicensePlate($diveraVehicles);
+            $steinIndex = $this->indexByLabel($steinAssets);
             
             if ($direction === 'both' || $direction === 'divera_to_stein') {
-                $result = $this->syncDiveraToStein($fields);
+                $result = $this->syncDiveraToStein($diveraVehicles, $steinIndex);
                 $stats['synced'] += $result['synced'];
-                $stats['created'] += $result['created'];
                 $stats['updated'] += $result['updated'];
+                $stats['skipped'] += $result['skipped'];
                 $stats['errors'] += $result['errors'];
+                $stats['details']['divera_to_stein'] = $result;
             }
             
             if ($direction === 'both' || $direction === 'stein_to_divera') {
-                $result = $this->syncSteinToDivera($fields);
+                $result = $this->syncSteinToDivera($steinAssets, $diveraIndex);
                 $stats['synced'] += $result['synced'];
-                $stats['created'] += $result['created'];
                 $stats['updated'] += $result['updated'];
+                $stats['skipped'] += $result['skipped'];
                 $stats['errors'] += $result['errors'];
+                $stats['details']['stein_to_divera'] = $result;
             }
             
             $stats['completed_at'] = date('c');
@@ -79,130 +102,208 @@ class SyncService {
         return $stats;
     }
     
-    private function syncDiveraToStein(array $fields): array {
-        $result = ['synced' => 0, 'created' => 0, 'updated' => 0, 'errors' => 0];
+    /**
+     * Sync von Divera nach Stein.app
+     * Aktualisiert den Status in Stein.app basierend auf Divera
+     */
+    private function syncDiveraToStein(array $diveraVehicles, array $steinIndex): array {
+        $result = ['synced' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => 0, 'vehicles' => []];
         
-        try {
-            $diveraMembers = $this->divera->getMembers();
-            $steinMembers = $this->stein->getMembers();
-            
-            // Index Stein members by external_id
-            $steinIndex = [];
-            foreach ($steinMembers as $member) {
-                if ($member['external_id']) {
-                    $steinIndex[$member['external_id']] = $member;
+        $fields = $this->getFieldConfig();
+        
+        foreach ($diveraVehicles as $diveraVehicle) {
+            try {
+                $licensePlate = $diveraVehicle['license_plate_normalized'];
+                
+                // Suche passendes Asset in Stein.app
+                $steinAsset = $steinIndex[$licensePlate] ?? null;
+                
+                if (!$steinAsset) {
+                    $this->logger->debug('No matching Stein asset for Divera vehicle', [
+                        'license_plate' => $diveraVehicle['license_plate']
+                    ]);
+                    $result['skipped']++;
+                    continue;
                 }
+                
+                // Prüfe ob Update nötig ist
+                $needsUpdate = false;
+                $updateData = [];
+                
+                // Status synchronisieren
+                if ($fields['status'] ?? true) {
+                    $newStatus = $diveraVehicle['status'];
+                    if ($steinAsset['status'] !== $newStatus) {
+                        $updateData['status'] = $newStatus;
+                        $needsUpdate = true;
+                    }
+                }
+                
+                // Funkrufname synchronisieren
+                if (($fields['radio_name'] ?? true) && !empty($diveraVehicle['issi'])) {
+                    if (($steinAsset['issi'] ?? '') !== $diveraVehicle['issi']) {
+                        $updateData['issi'] = $diveraVehicle['issi'];
+                        $needsUpdate = true;
+                    }
+                }
+                
+                // Kommentar/Notiz synchronisieren
+                if (($fields['comment'] ?? false) && !empty($diveraVehicle['note'])) {
+                    if (($steinAsset['comment'] ?? '') !== $diveraVehicle['note']) {
+                        $updateData['comment'] = $diveraVehicle['note'];
+                        $needsUpdate = true;
+                    }
+                }
+                
+                if ($needsUpdate) {
+                    if ($this->stein->updateAsset($steinAsset['id'], $updateData)) {
+                        $result['updated']++;
+                        $result['vehicles'][] = [
+                            'license_plate' => $diveraVehicle['license_plate'],
+                            'action' => 'updated',
+                            'changes' => array_keys($updateData)
+                        ];
+                        $this->logger->info('Updated Stein asset', [
+                            'license_plate' => $diveraVehicle['license_plate'],
+                            'stein_id' => $steinAsset['id'],
+                            'changes' => $updateData
+                        ]);
+                    } else {
+                        $result['errors']++;
+                    }
+                } else {
+                    $result['vehicles'][] = [
+                        'license_plate' => $diveraVehicle['license_plate'],
+                        'action' => 'no_change'
+                    ];
+                }
+                
+                $result['synced']++;
+                
+            } catch (Exception $e) {
+                $result['errors']++;
+                $this->logger->warning('Failed to sync vehicle: ' . $e->getMessage(), [
+                    'license_plate' => $diveraVehicle['license_plate'] ?? 'unknown'
+                ]);
             }
-            
-            foreach ($diveraMembers as $diveraMember) {
-                try {
-                    $externalId = 'divera_' . $diveraMember['id'];
-                    $data = $this->filterFields($diveraMember, $fields);
-                    $data['external_id'] = $externalId;
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Sync von Stein.app nach Divera
+     * Aktualisiert den Status in Divera basierend auf Stein.app
+     */
+    private function syncSteinToDivera(array $steinAssets, array $diveraIndex): array {
+        $result = ['synced' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => 0, 'vehicles' => []];
+        
+        $fields = $this->getFieldConfig();
+        
+        foreach ($steinAssets as $steinAsset) {
+            try {
+                // Normalisiere das Label (Kennzeichen) von Stein
+                $licensePlate = $this->normalizeLicensePlate($steinAsset['label']);
+                
+                // Suche passendes Fahrzeug in Divera
+                $diveraVehicle = $diveraIndex[$licensePlate] ?? null;
+                
+                if (!$diveraVehicle) {
+                    $this->logger->debug('No matching Divera vehicle for Stein asset', [
+                        'label' => $steinAsset['label']
+                    ]);
+                    $result['skipped']++;
+                    continue;
+                }
+                
+                // Prüfe ob Status-Update nötig ist
+                if ($fields['status'] ?? true) {
+                    $currentDiveraStatus = $diveraVehicle['status'];
+                    $steinStatus = $steinAsset['status'];
                     
-                    if (isset($steinIndex[$externalId])) {
-                        // Update existing
-                        if ($this->stein->updateMember($steinIndex[$externalId]['id'], $data)) {
+                    // Nur updaten wenn Status unterschiedlich
+                    if ($currentDiveraStatus !== $steinStatus) {
+                        $newFmsStatus = $this->divera->mapSteinStatusToDivera($steinStatus);
+                        
+                        if ($this->divera->updateVehicleStatus($diveraVehicle['id'], $newFmsStatus)) {
                             $result['updated']++;
+                            $result['vehicles'][] = [
+                                'license_plate' => $steinAsset['label'],
+                                'action' => 'updated',
+                                'old_status' => $currentDiveraStatus,
+                                'new_status' => $steinStatus
+                            ];
+                            $this->logger->info('Updated Divera vehicle status', [
+                                'license_plate' => $steinAsset['label'],
+                                'divera_id' => $diveraVehicle['id'],
+                                'new_fms_status' => $newFmsStatus
+                            ]);
+                        } else {
+                            $result['errors']++;
                         }
                     } else {
-                        // Create new
-                        if ($this->stein->createMember($data)) {
-                            $result['created']++;
-                        }
+                        $result['vehicles'][] = [
+                            'license_plate' => $steinAsset['label'],
+                            'action' => 'no_change'
+                        ];
                     }
-                    $result['synced']++;
-                    
-                } catch (Exception $e) {
-                    $result['errors']++;
-                    $this->logger->warning('Failed to sync member: ' . $e->getMessage());
                 }
+                
+                $result['synced']++;
+                
+            } catch (Exception $e) {
+                $result['errors']++;
+                $this->logger->warning('Failed to sync asset: ' . $e->getMessage(), [
+                    'label' => $steinAsset['label'] ?? 'unknown'
+                ]);
             }
-            
-        } catch (Exception $e) {
-            $result['errors']++;
-            throw $e;
         }
         
         return $result;
     }
     
-    private function syncSteinToDivera(array $fields): array {
-        $result = ['synced' => 0, 'created' => 0, 'updated' => 0, 'errors' => 0];
-        
-        try {
-            $steinMembers = $this->stein->getMembers();
-            $diveraMembers = $this->divera->getMembers();
-            
-            // Index Divera members by external_id
-            $diveraIndex = [];
-            foreach ($diveraMembers as $member) {
-                if ($member['external_id']) {
-                    $diveraIndex[$member['external_id']] = $member;
-                }
-                // Also index by Divera ID
-                $diveraIndex['divera_' . $member['id']] = $member;
-            }
-            
-            foreach ($steinMembers as $steinMember) {
-                try {
-                    $externalId = $steinMember['external_id'];
-                    
-                    // Only sync if linked to Divera
-                    if ($externalId && strpos($externalId, 'divera_') === 0) {
-                        $diveraId = str_replace('divera_', '', $externalId);
-                        
-                        if (isset($diveraIndex[$externalId])) {
-                            $data = $this->filterFields($steinMember, $fields);
-                            if ($this->divera->updateMember($diveraId, $data)) {
-                                $result['updated']++;
-                            }
-                            $result['synced']++;
-                        }
-                    }
-                    
-                } catch (Exception $e) {
-                    $result['errors']++;
-                    $this->logger->warning('Failed to sync member: ' . $e->getMessage());
-                }
-            }
-            
-        } catch (Exception $e) {
-            $result['errors']++;
-            throw $e;
-        }
-        
-        return $result;
-    }
-    
-    private function filterFields(array $data, array $fields): array {
-        $filtered = [];
-        
-        $fieldMapping = [
-            'name' => ['first_name', 'last_name'],
-            'email' => ['email'],
-            'phone' => ['phone', 'mobile'],
-            'address' => ['address'],
-            'status' => ['status', 'active'],
-            'qualifications' => ['qualifications'],
-            'group' => ['groups'],
-            'rank' => ['rank'],
-            'notes' => ['notes']
-        ];
-        
-        foreach ($fields as $field => $enabled) {
-            if ($enabled && isset($fieldMapping[$field])) {
-                foreach ($fieldMapping[$field] as $key) {
-                    if (isset($data[$key])) {
-                        $filtered[$key] = $data[$key];
-                    }
-                }
+    /**
+     * Erstelle Index der Divera-Fahrzeuge nach normalisiertem Kennzeichen
+     */
+    private function indexByLicensePlate(array $vehicles): array {
+        $index = [];
+        foreach ($vehicles as $vehicle) {
+            $normalized = $vehicle['license_plate_normalized'] ?? '';
+            if ($normalized) {
+                $index[$normalized] = $vehicle;
             }
         }
-        
-        return $filtered;
+        return $index;
     }
     
+    /**
+     * Erstelle Index der Stein-Assets nach normalisiertem Label (Kennzeichen)
+     */
+    private function indexByLabel(array $assets): array {
+        $index = [];
+        foreach ($assets as $asset) {
+            $label = $asset['label'] ?? '';
+            $normalized = $this->normalizeLicensePlate($label);
+            if ($normalized) {
+                $index[$normalized] = $asset;
+            }
+        }
+        return $index;
+    }
+    
+    /**
+     * Normalisiere Kennzeichen für Vergleich
+     */
+    private function normalizeLicensePlate(string $plate): string {
+        // Entferne Leerzeichen und Bindestriche
+        $normalized = preg_replace('/[\s\-]/', '', $plate);
+        // Großbuchstaben
+        return strtoupper($normalized);
+    }
+    
+    /**
+     * Hole Statistiken
+     */
     public function getStats(): array {
         $stats = [
             'last_sync' => null,
@@ -210,7 +311,12 @@ class SyncService {
             'errors_24h' => 0,
             'status' => 'healthy',
             'auto_sync_enabled' => $this->config['auto_enabled'] ?? true,
-            'next_sync' => null
+            'next_sync' => null,
+            'vehicle_count' => [
+                'divera' => 0,
+                'stein' => 0,
+                'matched' => 0
+            ]
         ];
         
         try {
@@ -251,6 +357,28 @@ class SyncService {
                 $stats['status'] = 'warning';
             }
             
+            // Vehicle counts (optional, may fail if APIs not configured)
+            try {
+                $diveraVehicles = $this->divera->getVehicles();
+                $steinAssets = $this->stein->getAssets();
+                
+                $stats['vehicle_count']['divera'] = count($diveraVehicles);
+                $stats['vehicle_count']['stein'] = count($steinAssets);
+                
+                // Count matches
+                $diveraIndex = $this->indexByLicensePlate($diveraVehicles);
+                $matched = 0;
+                foreach ($steinAssets as $asset) {
+                    $normalized = $this->normalizeLicensePlate($asset['label'] ?? '');
+                    if (isset($diveraIndex[$normalized])) {
+                        $matched++;
+                    }
+                }
+                $stats['vehicle_count']['matched'] = $matched;
+            } catch (Exception $e) {
+                // Ignore - APIs might not be configured yet
+            }
+            
         } catch (Exception $e) {
             $this->logger->error('Failed to get stats: ' . $e->getMessage());
         }
@@ -258,29 +386,38 @@ class SyncService {
         return $stats;
     }
     
+    /**
+     * Hole Feld-Konfiguration
+     */
     public function getFieldConfig(): array {
         try {
             $result = $this->db->fetchOne("SELECT config FROM field_config WHERE id = 1");
             if ($result) {
-                return json_decode($result['config'], true) ?? $this->config['fields'];
+                return json_decode($result['config'], true) ?? $this->getDefaultFieldConfig();
             }
         } catch (Exception $e) {
             // Table might not exist yet
         }
         
-        return $this->config['fields'] ?? [
-            'name' => true,
-            'email' => true,
-            'phone' => true,
-            'address' => true,
-            'status' => true,
-            'qualifications' => true,
-            'group' => false,
-            'rank' => false,
-            'notes' => false
+        return $this->getDefaultFieldConfig();
+    }
+    
+    /**
+     * Standard Feld-Konfiguration für Fahrzeuge
+     */
+    private function getDefaultFieldConfig(): array {
+        return [
+            'status' => true,           // Fahrzeugstatus (einsatzbereit, im Einsatz, etc.)
+            'radio_name' => true,       // Funkrufname / ISSI
+            'comment' => false,         // Kommentar / Notiz
+            'category' => false,        // Kategorie
+            'name' => false             // Name / Beschreibung
         ];
     }
     
+    /**
+     * Aktualisiere Feld-Konfiguration
+     */
     public function updateFieldConfig(string $field, bool $enabled): void {
         $fields = $this->getFieldConfig();
         $fields[$field] = $enabled;
@@ -299,6 +436,9 @@ class SyncService {
         }
     }
     
+    /**
+     * Update last sync timestamp
+     */
     private function updateLastSync(): void {
         try {
             $this->db->execute(
@@ -311,16 +451,19 @@ class SyncService {
         }
     }
     
+    /**
+     * Speichere Sync-Historie
+     */
     private function saveSyncHistory(array $stats): void {
         try {
             $this->db->insert('sync_history', [
                 'direction' => $stats['direction'],
                 'source' => $stats['source'],
                 'synced_count' => $stats['synced'],
-                'created_count' => $stats['created'],
+                'created_count' => $stats['created'] ?? 0,
                 'updated_count' => $stats['updated'],
                 'error_count' => $stats['errors'],
-                'success' => $stats['success'] ? 1 : 0,
+                'success' => ($stats['success'] ?? false) ? 1 : 0,
                 'created_at' => date('Y-m-d H:i:s')
             ]);
         } catch (Exception $e) {

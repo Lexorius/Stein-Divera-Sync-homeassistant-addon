@@ -2,6 +2,11 @@
 /**
  * DiveraService Class
  * Handles communication with Divera24-7 API
+ * 
+ * Divera API Dokumentation: https://api.divera247.com/
+ * 
+ * WICHTIG: Diese Integration synchronisiert FAHRZEUGE zwischen Divera und Stein.app
+ * Die Zuordnung erfolgt über das KENNZEICHEN (muss in beiden Systemen identisch sein)
  */
 
 class DiveraService {
@@ -13,12 +18,22 @@ class DiveraService {
         $this->logger = $logger;
     }
     
+    /**
+     * Teste die Verbindung zur Divera API
+     */
     public function testConnection(): array {
         try {
             $response = $this->request('GET', '/pull/all');
+            
+            $vehicleCount = 0;
+            if (isset($response['data']['cluster']['vehicle'])) {
+                $vehicleCount = count($response['data']['cluster']['vehicle']);
+            }
+            
             return [
                 'success' => true,
-                'message' => 'Connection successful'
+                'message' => 'Connection successful',
+                'vehicle_count' => $vehicleCount
             ];
         } catch (Exception $e) {
             return [
@@ -28,62 +43,176 @@ class DiveraService {
         }
     }
     
-    public function getMembers(): array {
-        $this->logger->info('Fetching members from Divera');
+    /**
+     * Hole alle Fahrzeuge aus Divera
+     * Die Zuordnung zu Stein.app erfolgt über das Kennzeichen!
+     */
+    public function getVehicles(): array {
+        $this->logger->info('Fetching vehicles from Divera');
         
         try {
             $response = $this->request('GET', '/pull/all');
-            $members = [];
+            $vehicles = [];
             
-            if (isset($response['data']['cluster']['consumer'])) {
-                foreach ($response['data']['cluster']['consumer'] as $id => $member) {
-                    $members[] = $this->mapMember($id, $member);
+            if (isset($response['data']['cluster']['vehicle'])) {
+                foreach ($response['data']['cluster']['vehicle'] as $id => $vehicle) {
+                    $mapped = $this->mapVehicle($id, $vehicle);
+                    if ($mapped) {
+                        $vehicles[] = $mapped;
+                    }
                 }
             }
             
-            $this->logger->info('Fetched ' . count($members) . ' members from Divera');
-            return $members;
+            $this->logger->info('Fetched ' . count($vehicles) . ' vehicles from Divera');
+            return $vehicles;
             
         } catch (Exception $e) {
-            $this->logger->error('Failed to fetch Divera members: ' . $e->getMessage());
+            $this->logger->error('Failed to fetch Divera vehicles: ' . $e->getMessage());
             throw $e;
         }
     }
     
-    public function updateMember(string $id, array $data): bool {
-        $this->logger->info('Updating member in Divera', ['id' => $id]);
+    /**
+     * Hole ein einzelnes Fahrzeug
+     */
+    public function getVehicle(string $id): ?array {
+        try {
+            $vehicles = $this->getVehicles();
+            foreach ($vehicles as $vehicle) {
+                if ($vehicle['id'] == $id) {
+                    return $vehicle;
+                }
+            }
+            return null;
+        } catch (Exception $e) {
+            $this->logger->error('Failed to fetch vehicle: ' . $e->getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Aktualisiere Fahrzeugstatus in Divera
+     */
+    public function updateVehicleStatus(string $id, int $status): bool {
+        $this->logger->info('Updating vehicle status in Divera', ['id' => $id, 'status' => $status]);
         
         try {
-            $this->request('PUT', '/consumer/' . $id, $data);
+            // Divera verwendet FMS-Status (1-6)
+            $this->request('POST', '/v2/using-vehicle', [
+                'vehicle_id' => $id,
+                'status' => $status
+            ]);
             return true;
         } catch (Exception $e) {
-            $this->logger->error('Failed to update Divera member: ' . $e->getMessage());
+            $this->logger->error('Failed to update Divera vehicle status: ' . $e->getMessage());
             return false;
         }
     }
     
-    private function mapMember(string $id, array $data): array {
+    /**
+     * Mappe Divera Fahrzeug zu internem Format
+     */
+    private function mapVehicle(string $id, array $data): ?array {
+        // Kennzeichen ist das wichtigste Feld für die Zuordnung!
+        $licensePlate = $data['name'] ?? '';
+        
+        // Wenn kein Kennzeichen vorhanden, überspringen
+        if (empty($licensePlate)) {
+            $this->logger->debug('Vehicle without license plate skipped', ['id' => $id]);
+            return null;
+        }
+        
+        // Normalisiere Kennzeichen (Leerzeichen und Bindestriche entfernen)
+        $normalizedPlate = $this->normalizeLicensePlate($licensePlate);
+        
         return [
             'id' => $id,
-            'external_id' => $data['foreign_id'] ?? null,
-            'first_name' => $data['firstname'] ?? '',
-            'last_name' => $data['lastname'] ?? '',
-            'email' => $data['email'] ?? '',
-            'phone' => $data['phone'] ?? '',
-            'mobile' => $data['mobile'] ?? '',
-            'address' => [
-                'street' => $data['address'] ?? '',
-                'zip' => $data['zip'] ?? '',
-                'city' => $data['city'] ?? ''
-            ],
-            'status' => $data['status'] ?? 0,
-            'qualifications' => $data['qualifications'] ?? [],
-            'groups' => $data['group_ids'] ?? [],
-            'active' => $data['active'] ?? true,
+            'license_plate' => $licensePlate,
+            'license_plate_normalized' => $normalizedPlate,
+            'name' => $data['shortname'] ?? $licensePlate,
+            'fullname' => $data['fullname'] ?? '',
+            'status' => $this->mapDiveraStatus($data['fmsstatus'] ?? 0),
+            'fms_status' => $data['fmsstatus'] ?? 0,
+            'group_id' => $data['group'] ?? null,
+            'issi' => $data['issi'] ?? '',
+            'note' => $data['note'] ?? '',
+            'color' => $data['color'] ?? '',
+            'icon' => $data['icon'] ?? '',
+            'ordering' => $data['ordering'] ?? 0,
+            'visible' => $data['visible'] ?? true,
             'source' => 'divera'
         ];
     }
     
+    /**
+     * Normalisiere Kennzeichen für Vergleich
+     * Entfernt Leerzeichen, Bindestriche und macht alles Großbuchstaben
+     */
+    private function normalizeLicensePlate(string $plate): string {
+        // Entferne Leerzeichen und Bindestriche
+        $normalized = preg_replace('/[\s\-]/', '', $plate);
+        // Großbuchstaben
+        return strtoupper($normalized);
+    }
+    
+    /**
+     * Mappe Divera FMS-Status zu Stein.app Status
+     * 
+     * Divera FMS Status:
+     * 0 = Nicht gesetzt
+     * 1 = Einsatzbereit auf Funk
+     * 2 = Einsatzbereit auf Wache
+     * 3 = Einsatz übernommen / Anfahrt
+     * 4 = Am Einsatzort
+     * 5 = Sprechwunsch
+     * 6 = Nicht einsatzbereit
+     * 
+     * Stein.app Status:
+     * - ready
+     * - notready
+     * - semiready
+     * - inuse
+     * - maint
+     */
+    private function mapDiveraStatus(int $fmsStatus): string {
+        switch ($fmsStatus) {
+            case 1:
+            case 2:
+                return 'ready';
+            case 3:
+            case 4:
+                return 'inuse';
+            case 5:
+                return 'semiready';
+            case 6:
+                return 'notready';
+            default:
+                return 'ready';
+        }
+    }
+    
+    /**
+     * Mappe Stein.app Status zurück zu Divera FMS-Status
+     */
+    public function mapSteinStatusToDivera(string $steinStatus): int {
+        switch ($steinStatus) {
+            case 'ready':
+                return 2; // Einsatzbereit auf Wache
+            case 'inuse':
+                return 3; // Einsatz übernommen
+            case 'semiready':
+                return 5; // Sprechwunsch (bedingt einsatzbereit)
+            case 'notready':
+            case 'maint':
+                return 6; // Nicht einsatzbereit
+            default:
+                return 2;
+        }
+    }
+    
+    /**
+     * HTTP Request an Divera API
+     */
     private function request(string $method, string $endpoint, array $data = null): array {
         $url = rtrim($this->config['base_url'], '/') . $endpoint;
         
@@ -162,5 +291,25 @@ class DiveraService {
         }
         
         return $decoded ?? [];
+    }
+    
+    // ========================================
+    // Legacy-Methoden für Kompatibilität
+    // ========================================
+    
+    /**
+     * @deprecated Use getVehicles() instead
+     */
+    public function getMembers(): array {
+        $this->logger->warning('getMembers() is deprecated - this integration syncs VEHICLES, not members');
+        return [];
+    }
+    
+    /**
+     * @deprecated
+     */
+    public function updateMember(string $id, array $data): bool {
+        $this->logger->warning('updateMember() is deprecated');
+        return false;
     }
 }
