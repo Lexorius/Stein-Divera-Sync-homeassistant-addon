@@ -4,6 +4,15 @@
  * Handles all API requests for Divera <-> Stein.app synchronization
  */
 
+// Load configuration first to get timezone
+$configFile = __DIR__ . '/config/config.php';
+if (file_exists($configFile)) {
+    $config = require $configFile;
+    if (isset($config['timezone'])) {
+        date_default_timezone_set($config['timezone']);
+    }
+}
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -21,12 +30,14 @@ set_error_handler(function($severity, $message, $file, $line) {
 });
 
 try {
-    // Load configuration
-    $configFile = __DIR__ . '/config/config.php';
-    if (!file_exists($configFile)) {
-        throw new Exception('Configuration file not found');
+    // Config was already loaded at top for timezone
+    if (!isset($config)) {
+        $configFile = __DIR__ . '/config/config.php';
+        if (!file_exists($configFile)) {
+            throw new Exception('Configuration file not found');
+        }
+        $config = require $configFile;
     }
-    $config = require $configFile;
     
     // Initialize database
     require_once __DIR__ . '/src/Database.php';
@@ -129,6 +140,89 @@ try {
                 'success' => true,
                 'data' => $results
             ]);
+            break;
+            
+        case 'debug':
+            // Debug endpoint - zeigt Konfiguration und testet Verbindungen
+            $debugInfo = [
+                'timestamp' => date('c'),
+                'timezone' => date_default_timezone_get(),
+                'php_version' => PHP_VERSION,
+                'config' => [
+                    'stein' => [
+                        'base_url' => $config['stein']['base_url'] ?? 'NOT SET',
+                        'business_unit_id' => $config['stein']['business_unit_id'] ?? 'NOT SET',
+                        'api_key_set' => !empty($config['stein']['api_key']),
+                        'api_key_length' => strlen($config['stein']['api_key'] ?? '')
+                    ],
+                    'divera' => [
+                        'base_url' => $config['divera']['base_url'] ?? 'NOT SET',
+                        'access_key_set' => !empty($config['divera']['access_key']),
+                        'access_key_length' => strlen($config['divera']['access_key'] ?? '')
+                    ]
+                ],
+                'connection_tests' => [
+                    'stein' => $steinService->testConnection(),
+                    'divera' => $diveraService->testConnection()
+                ]
+            ];
+            echo json_encode([
+                'success' => true,
+                'data' => $debugInfo
+            ], JSON_PRETTY_PRINT);
+            break;
+            
+        case 'testSteinRaw':
+            // Raw test für Stein API - zeigt genau was passiert
+            $testUrl = $config['stein']['base_url'];
+            $testEndpoint = $_GET['endpoint'] ?? '/business-units/' . $config['stein']['business_unit_id'];
+            $fullUrl = rtrim($testUrl, '/') . $testEndpoint;
+            
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $fullUrl,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_HEADER => true,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Accept: application/json',
+                    'Authorization: Bearer ' . $config['stein']['api_key']
+                ]
+            ]);
+            
+            $response = curl_exec($ch);
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $headers = substr($response, 0, $headerSize);
+            $body = substr($response, $headerSize);
+            $info = curl_getinfo($ch);
+            $error = curl_error($ch);
+            curl_close($ch);
+            
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'request' => [
+                        'url' => $fullUrl,
+                        'base_url' => $testUrl,
+                        'endpoint' => $testEndpoint,
+                        'method' => 'GET'
+                    ],
+                    'response' => [
+                        'http_code' => $info['http_code'],
+                        'total_time' => $info['total_time'],
+                        'headers' => $headers,
+                        'body' => $body,
+                        'body_decoded' => json_decode($body, true)
+                    ],
+                    'curl_error' => $error ?: null,
+                    'curl_info' => [
+                        'effective_url' => $info['url'],
+                        'redirect_count' => $info['redirect_count'],
+                        'content_type' => $info['content_type']
+                    ]
+                ]
+            ], JSON_PRETTY_PRINT);
             break;
             
         case 'config':
