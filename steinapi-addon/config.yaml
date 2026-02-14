@@ -1,7 +1,7 @@
 ---
 name: "SteinAPI - Divera Sync"
 description: "API + Dashboard für die Synchronisation zwischen Divera24-7 und Stein.app"
-version: "1.0.0"
+version: "1.0.1"
 slug: "steinapi"
 url: "https://github.com/Lexorius/steinapi"
 arch:
@@ -32,7 +32,7 @@ options:
   # Stein.app Konfiguration
   stein_api_key: ""
   stein_business_unit_id: ""
-  stein_base_url: "https://api.stein.app/v1"
+  stein_base_url: "https://www.stein.app/api"
   
   # Sync Einstellungen
   sync_interval_minutes: 5
@@ -40,6 +40,7 @@ options:
   auto_sync_enabled: true
   
   # Erweiterte Einstellungen
+  timezone: "Europe/Berlin"
   log_level: "info"
   max_log_entries: 1000
   rate_limit_requests: 100
@@ -55,6 +56,7 @@ schema:
   sync_interval_minutes: int(1,60)
   sync_direction: list(both|divera_to_stein|stein_to_divera)
   auto_sync_enabled: bool
+  timezone: str
   log_level: list(debug|info|warning|error)
   max_log_entries: int(100,10000)
   rate_limit_requests: int(10,1000)
