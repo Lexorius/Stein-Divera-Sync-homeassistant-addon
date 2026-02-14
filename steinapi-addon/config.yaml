@@ -1,7 +1,7 @@
 ---
 name: "SteinAPI - Divera Sync"
 description: "API + Dashboard für die Synchronisation zwischen Divera24-7 und Stein.app"
-version: "2.0.1"
+version: "2.0.2"
 slug: "steinapi"
 url: "https://github.com/Lexorius/steinapi"
 arch:
