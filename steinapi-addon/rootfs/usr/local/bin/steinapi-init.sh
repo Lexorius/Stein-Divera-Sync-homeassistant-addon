@@ -18,10 +18,11 @@ DIVERA_ACCESS_KEY=$(jq -r '.divera_access_key // ""' $CONFIG_PATH)
 DIVERA_BASE_URL=$(jq -r '.divera_base_url // "https://app.divera247.com/api/v2"' $CONFIG_PATH)
 STEIN_API_KEY=$(jq -r '.stein_api_key // ""' $CONFIG_PATH)
 STEIN_BUSINESS_UNIT_ID=$(jq -r '.stein_business_unit_id // ""' $CONFIG_PATH)
-STEIN_BASE_URL=$(jq -r '.stein_base_url // "https://api.stein.app/v1"' $CONFIG_PATH)
+STEIN_BASE_URL=$(jq -r '.stein_base_url // "https://www.stein.app/api"' $CONFIG_PATH)
 SYNC_INTERVAL=$(jq -r '.sync_interval_minutes // 5' $CONFIG_PATH)
 SYNC_DIRECTION=$(jq -r '.sync_direction // "both"' $CONFIG_PATH)
 AUTO_SYNC=$(jq -r '.auto_sync_enabled // true' $CONFIG_PATH)
+TIMEZONE=$(jq -r '.timezone // "Europe/Berlin"' $CONFIG_PATH)
 LOG_LEVEL=$(jq -r '.log_level // "info"' $CONFIG_PATH)
 MAX_LOG_ENTRIES=$(jq -r '.max_log_entries // 1000' $CONFIG_PATH)
 RATE_LIMIT_REQUESTS=$(jq -r '.rate_limit_requests // 100' $CONFIG_PATH)
@@ -31,6 +32,12 @@ echo "[INFO] Port: $PORT"
 echo "[INFO] Sync Interval: $SYNC_INTERVAL Minuten"
 echo "[INFO] Sync Direction: $SYNC_DIRECTION"
 echo "[INFO] Auto Sync: $AUTO_SYNC"
+echo "[INFO] Timezone: $TIMEZONE"
+
+# Setze Zeitzone
+echo "[INFO] Setze Zeitzone auf $TIMEZONE..."
+ln -snf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
+echo "$TIMEZONE" > /etc/timezone
 
 # Erstelle Datenverzeichnisse
 echo "[INFO] Erstelle Verzeichnisse..."
