@@ -52,7 +52,7 @@ Nach der Installation muss das Add-on konfiguriert werden:
 |--------|--------------|
 | `stein_api_key` | API Key aus Stein.app |
 | `stein_business_unit_id` | Business Unit ID aus Stein.app |
-| `stein_base_url` | API URL (Standard: `https://api.stein.app/v1`) |
+| `stein_base_url` | API URL (Standard: `https://www.stein.app/api`) |
 
 ### Sync-Einstellungen
 
@@ -66,6 +66,7 @@ Nach der Installation muss das Add-on konfiguriert werden:
 
 | Option | Beschreibung | Standard |
 |--------|--------------|----------|
+| `timezone` | Zeitzone des Containers | `Europe/Berlin` |
 | `log_level` | Log-Detail (`debug`, `info`, `warning`, `error`) | `info` |
 | `max_log_entries` | Max. Anzahl Log-Einträge | `1000` |
 | `rate_limit_requests` | API-Anfragen pro Zeitfenster | `100` |
@@ -79,10 +80,11 @@ divera_access_key: "your-divera-access-key-here"
 divera_base_url: "https://app.divera247.com/api/v2"
 stein_api_key: "your-stein-api-key-here"
 stein_business_unit_id: "your-business-unit-id"
-stein_base_url: "https://api.stein.app/v1"
+stein_base_url: "https://www.stein.app/api"
 sync_interval_minutes: 5
 sync_direction: "both"
 auto_sync_enabled: true
+timezone: "Europe/Berlin"
 log_level: "info"
 max_log_entries: 1000
 rate_limit_requests: 100
@@ -117,6 +119,16 @@ Das Add-on stellt folgende API-Endpunkte bereit:
 | `/api.php?action=updateField` | POST | Feld aktualisieren |
 | `/api.php?action=testConnection` | GET | Verbindung testen |
 | `/api.php?action=health` | GET | Health Check |
+
+### Debug-Endpunkte
+
+| Endpunkt | Methode | Beschreibung |
+|----------|---------|--------------|
+| `/api.php?action=debug` | GET | Zeigt Konfiguration und testet alle Verbindungen |
+| `/api.php?action=testSteinRaw` | GET | Raw API-Test für Stein.app mit vollständiger Response |
+| `/api.php?action=testSteinRaw&endpoint=/your/endpoint` | GET | Testet beliebigen Stein.app Endpoint |
+
+**Tipp:** Setze `log_level: "debug"` in der Konfiguration für detaillierte API-Logs.
 
 ## 🗃️ Datenbank
 
