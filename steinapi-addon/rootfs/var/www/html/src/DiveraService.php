@@ -91,6 +91,16 @@ class DiveraService {
         $separator = strpos($url, '?') !== false ? '&' : '?';
         $url .= $separator . 'accesskey=' . urlencode($this->config['access_key']);
         
+        // Debug: Log request details (ohne Access Key im Log)
+        $logUrl = preg_replace('/accesskey=[^&]+/', 'accesskey=***', $url);
+        $this->logger->debug('Divera API Request', [
+            'method' => $method,
+            'url' => $logUrl,
+            'endpoint' => $endpoint,
+            'base_url' => $this->config['base_url'],
+            'has_data' => $data !== null
+        ]);
+        
         $ch = curl_init();
         
         curl_setopt_array($ch, [
@@ -106,25 +116,48 @@ class DiveraService {
         if ($method === 'POST' || $method === 'PUT') {
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
             if ($data !== null) {
-                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+                $jsonData = json_encode($data);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
+                $this->logger->debug('Divera API Request Body', ['body' => $jsonData]);
             }
         }
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
+        $curlInfo = curl_getinfo($ch);
         curl_close($ch);
         
+        // Debug: Log response details
+        $this->logger->debug('Divera API Response', [
+            'http_code' => $httpCode,
+            'total_time' => $curlInfo['total_time'],
+            'response_length' => strlen($response),
+            'response_preview' => substr($response, 0, 500)
+        ]);
+        
         if ($error) {
+            $this->logger->error('Divera API CURL Error', [
+                'error' => $error,
+                'url' => $logUrl
+            ]);
             throw new Exception('Divera API error: ' . $error);
         }
         
         if ($httpCode >= 400) {
-            throw new Exception('Divera API returned error code: ' . $httpCode);
+            $this->logger->error('Divera API HTTP Error', [
+                'http_code' => $httpCode,
+                'url' => $logUrl,
+                'response' => $response
+            ]);
+            throw new Exception('Divera API returned error code: ' . $httpCode . ' - Response: ' . substr($response, 0, 200));
         }
         
         $decoded = json_decode($response, true);
-        if ($decoded === null && $response !== 'null') {
+        if ($decoded === null && $response !== 'null' && !empty($response)) {
+            $this->logger->error('Divera API Invalid JSON', [
+                'response' => substr($response, 0, 500)
+            ]);
             throw new Exception('Invalid JSON response from Divera');
         }
         
