@@ -68,8 +68,8 @@ class SteinService {
         $this->logger->info('Fetching assets from Stein.app', ['bu_id' => $buId]);
         
         try {
-            // buIds ist ein Array-Parameter
-            $response = $this->request('GET', '/api/ext/assets/', ['buIds' => [$buId]]);
+            // buIds muss als einfacher Parameter übergeben werden: ?buIds=21
+            $response = $this->request('GET', '/api/ext/assets/?buIds=' . urlencode($buId));
             $assets = [];
             
             if (is_array($response)) {
@@ -108,7 +108,7 @@ class SteinService {
         
         try {
             $steinData = $this->mapToSteinFormat($data);
-            $this->request('PATCH', '/api/ext/assets/' . $assetId, null, $steinData);
+            $this->request('PATCH', '/api/ext/assets/' . $assetId, $steinData);
             return true;
         } catch (Exception $e) {
             $this->logger->error('Failed to update Stein.app asset: ' . $e->getMessage());
@@ -199,14 +199,8 @@ class SteinService {
     /**
      * HTTP Request an Stein.app API
      */
-    private function request(string $method, string $endpoint, array $queryParams = null, array $data = null): array {
+    private function request(string $method, string $endpoint, array $data = null): array {
         $url = self::BASE_URL . $endpoint;
-        
-        // Query Parameter hinzufügen
-        if ($queryParams) {
-            $queryString = http_build_query($queryParams);
-            $url .= '?' . $queryString;
-        }
         
         // Debug: Log request details
         $this->logger->debug('Stein API Request', [
