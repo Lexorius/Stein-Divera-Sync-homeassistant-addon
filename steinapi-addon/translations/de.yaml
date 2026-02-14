@@ -36,6 +36,10 @@
       "name": "Auto-Sync aktivieren",
       "description": "Soll die automatische Synchronisation aktiviert sein?"
     },
+    "timezone": {
+      "name": "Zeitzone",
+      "description": "Zeitzone für den Container (z.B. Europe/Berlin, Europe/Vienna, Europe/Zurich)"
+    },
     "log_level": {
       "name": "Log-Level",
       "description": "Detailgrad der Protokollierung (debug, info, warning, error)"
