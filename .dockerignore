@@ -1,0 +1,37 @@
+# Am Repo-Root, weil Docker-Build-Context hier anfängt (context: ..).
+# Alles außer dem, was das Image wirklich braucht, ausschließen.
+
+# Git
+.git
+.gitignore
+.github
+
+# Docs
+*.md
+README.md
+
+# Repo-interne Dateien
+repository.json
+
+# Standalone-Docker: nur der Entrypoint wird gebraucht, nicht .env/compose
+steinapi-docker/.env
+steinapi-docker/.env.example
+steinapi-docker/.gitignore
+steinapi-docker/.dockerignore
+steinapi-docker/docker-compose.yml
+steinapi-docker/README.md
+
+# HA-Addon: config.yaml + build.yaml sind HA-spezifisch und werden im
+# Standalone-Image nicht gebraucht (der Entrypoint baut options.json aus ENV)
+steinapi-addon/config.yaml
+steinapi-addon/build.yaml
+steinapi-addon/CHANGELOG.md
+steinapi-addon/README.md
+steinapi-addon/icon.svg
+steinapi-addon/translations
+steinapi-addon/Dockerfile
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
