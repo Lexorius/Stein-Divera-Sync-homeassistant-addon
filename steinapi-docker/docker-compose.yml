@@ -1,0 +1,29 @@
+services:
+  steinapi:
+    build:
+      # Build-Context = Repo-Root (eine Ebene hoch), damit wir steinapi-addon/rootfs/ teilen können
+      context: ..
+      dockerfile: steinapi-docker/Dockerfile
+    image: steinapi-divera-sync:local
+    container_name: steinapi
+    restart: unless-stopped
+    ports:
+      # Host-Port 8099 -> Container-Port 8099
+      # Im Browser erreichbar unter http://localhost:8099
+      - "8099:8099"
+    env_file:
+      - .env
+    volumes:
+      # Persistente Daten (MariaDB + Logs + options.json)
+      # Named Volume funktioniert unter Docker Desktop for Windows (WSL2) ohne Permission-Probleme
+      - steinapi-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8099/api.php?action=health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+volumes:
+  steinapi-data:
+    name: steinapi-data
