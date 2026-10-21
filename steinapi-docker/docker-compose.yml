@@ -8,13 +8,16 @@ services:
     container_name: steinapi
     restart: unless-stopped
     ports:
-      # Host-Port 8099 -> Container-Port 8099
-      # Im Browser erreichbar unter http://localhost:8099
-      - "8099:8099"
+      # Standard: nur vom lokalen Rechner erreichbar (http://localhost:8099).
+      # Die API hat KEINE eigene Authentifizierung - wer den Port erreicht, kann
+      # Syncs auslösen und Logs lesen. Für Zugriff aus dem LAN die 127.0.0.1
+      # entfernen ("8099:8099") und den Zugriff per Firewall/Reverse-Proxy mit
+      # Login absichern.
+      - "127.0.0.1:8099:8099"
     env_file:
       - .env
     volumes:
-      # Persistente Daten (MariaDB + Logs + options.json)
+      # Persistente Daten (MariaDB + Logs + options.json + DB-Passwort)
       # Named Volume funktioniert unter Docker Desktop for Windows (WSL2) ohne Permission-Probleme
       - steinapi-data:/data
     healthcheck:

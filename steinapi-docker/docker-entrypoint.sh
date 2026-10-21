@@ -6,12 +6,14 @@
 # Home-Assistant-Init-Script (steinapi-init.sh) unverändert weiterläuft.
 # Danach: supervisord starten (nginx + php-fpm + mariadb + cron).
 ###############################################################################
-set -e
+set -euo pipefail
 
 CONFIG_PATH=/data/options.json
 
 echo "============================================"
 echo "SteinAPI Standalone Container"
+echo "Version: $(cat /etc/steinapi-version 2>/dev/null || echo unbekannt)"
+echo "$(php -v 2>/dev/null | head -n1 || echo 'PHP: unbekannt')"
 echo "============================================"
 echo "[ENTRYPOINT] Erzeuge $CONFIG_PATH aus ENV-Variablen..."
 
@@ -30,6 +32,18 @@ echo "[ENTRYPOINT] Erzeuge $CONFIG_PATH aus ENV-Variablen..."
 : "${MAX_LOG_ENTRIES:=1000}"
 : "${RATE_LIMIT_REQUESTS:=100}"
 : "${RATE_LIMIT_WINDOW_SECONDS:=60}"
+: "${DEBUG_ENDPOINTS:=false}"
+
+# Hilfsfunktionen: ENV-Werte robust in JSON-Typen überführen
+to_bool() {
+    case "${1,,}" in
+        true|1|yes|on)  printf 'true' ;;
+        *)              printf 'false' ;;
+    esac
+}
+to_int() {
+    if [[ "$1" =~ ^[0-9]+$ ]]; then printf '%s' "$1"; else printf '%s' "$2"; fi
+}
 
 # Pflichtfelder prüfen (Warnung, aber kein Abbruch - evtl. über UI gesetzt)
 if [ -z "$DIVERA_ACCESS_KEY" ]; then
@@ -41,20 +55,21 @@ fi
 
 # JSON via jq bauen (sauberer als String-Concat)
 jq -n \
-    --argjson port "$PORT" \
+    --argjson port "$(to_int "$PORT" 8099)" \
     --arg divera_access_key "$DIVERA_ACCESS_KEY" \
     --arg divera_base_url "$DIVERA_BASE_URL" \
     --arg stein_api_key "$STEIN_API_KEY" \
     --arg stein_business_unit_id "$STEIN_BUSINESS_UNIT_ID" \
     --arg stein_base_url "$STEIN_BASE_URL" \
-    --argjson sync_interval_minutes "$SYNC_INTERVAL_MINUTES" \
+    --argjson sync_interval_minutes "$(to_int "$SYNC_INTERVAL_MINUTES" 5)" \
     --arg sync_direction "$SYNC_DIRECTION" \
-    --argjson auto_sync_enabled "$AUTO_SYNC_ENABLED" \
+    --argjson auto_sync_enabled "$(to_bool "$AUTO_SYNC_ENABLED")" \
     --arg timezone "$TIMEZONE" \
     --arg log_level "$LOG_LEVEL" \
-    --argjson max_log_entries "$MAX_LOG_ENTRIES" \
-    --argjson rate_limit_requests "$RATE_LIMIT_REQUESTS" \
-    --argjson rate_limit_window_seconds "$RATE_LIMIT_WINDOW_SECONDS" \
+    --argjson max_log_entries "$(to_int "$MAX_LOG_ENTRIES" 1000)" \
+    --argjson rate_limit_requests "$(to_int "$RATE_LIMIT_REQUESTS" 100)" \
+    --argjson rate_limit_window_seconds "$(to_int "$RATE_LIMIT_WINDOW_SECONDS" 60)" \
+    --argjson debug_endpoints "$(to_bool "$DEBUG_ENDPOINTS")" \
     '{
         port: $port,
         divera_access_key: $divera_access_key,
@@ -69,16 +84,19 @@ jq -n \
         log_level: $log_level,
         max_log_entries: $max_log_entries,
         rate_limit_requests: $rate_limit_requests,
-        rate_limit_window_seconds: $rate_limit_window_seconds
+        rate_limit_window_seconds: $rate_limit_window_seconds,
+        debug_endpoints: $debug_endpoints
     }' > "$CONFIG_PATH"
+chmod 600 "$CONFIG_PATH"
 
 echo "[ENTRYPOINT] options.json erstellt."
 
+# API-Keys aus der Umgebung entfernen - sie stehen jetzt in options.json/config.php
+# und sollen nicht an Kindprozesse (supervisord, php-fpm, nginx) vererbt werden.
+unset DIVERA_ACCESS_KEY STEIN_API_KEY
+
 # Sicherstellen dass /data-Unterverzeichnisse bei Named-Volume-Mount existieren
 mkdir -p /data/steinapi /data/mysql
-
-# MySQL-Datenverzeichnis nach Volume-Mount absichern
-chown -R mysql:mysql /data/mysql 2>/dev/null || true
 
 # Original-Init-Script vom HA-Addon aufrufen (baut DB auf, schreibt config.php)
 /usr/local/bin/steinapi-init.sh

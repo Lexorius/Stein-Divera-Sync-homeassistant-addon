@@ -11,45 +11,55 @@
 #     docker build -f steinapi-docker/Dockerfile -t steinapi-divera-sync:local .
 #
 # Unterschiede zum HA-Addon:
-#  - Basis: alpine:3.19 (statt ghcr.io/home-assistant/*-base) - kein s6-overlay
+#  - Basis: alpine:3.24 (statt ghcr.io/home-assistant/*-base) - kein s6-overlay
 #  - Konfiguration via Environment-Variablen (nicht /data/options.json von HA)
 #  - Eigener Entrypoint statt HA-Supervisor-Services
 ###############################################################################
-FROM alpine:3.19
+FROM alpine:3.24
+
+# Mindestversion von PHP, die die Fixes für CVE-2026-109618 und CVE-2026-109619
+# (Remote Code Execution, php.net Security Advisory vom 21.10.2026) enthält.
+# Der Build bricht ab, wenn Alpine eine ältere Version liefert.
+ARG PHP_MIN_VERSION=8.4.27
+ARG BUILD_VERSION=standalone
 
 # Gleiche Pakete wie im HA-Addon (damit PHP-App identisch läuft)
 RUN apk add --no-cache \
     nginx \
-    php83 \
-    php83-fpm \
-    php83-pdo \
-    php83-pdo_mysql \
-    php83-pdo_sqlite \
-    php83-sqlite3 \
-    php83-curl \
-    php83-json \
-    php83-mbstring \
-    php83-openssl \
-    php83-session \
-    php83-ctype \
-    php83-dom \
-    php83-xml \
-    php83-simplexml \
-    php83-tokenizer \
+    php84 \
+    php84-fpm \
+    php84-pdo \
+    php84-pdo_mysql \
+    php84-pdo_sqlite \
+    php84-sqlite3 \
+    php84-curl \
+    php84-mbstring \
+    php84-openssl \
+    php84-session \
+    php84-ctype \
+    php84-dom \
+    php84-xml \
+    php84-simplexml \
+    php84-tokenizer \
     mariadb \
     mariadb-client \
     mariadb-common \
+    mariadb-server-utils \
     supervisor \
     curl \
+    ca-certificates \
     jq \
     bash \
     tzdata \
-    && ln -sf /usr/sbin/php-fpm83 /usr/sbin/php-fpm
+    && ln -sf /usr/bin/php84 /usr/bin/php \
+    && ln -sf /usr/sbin/php-fpm84 /usr/sbin/php-fpm \
+    && php -r 'if (version_compare(PHP_VERSION, $argv[1], "<")) { fwrite(STDERR, "FEHLER: PHP " . PHP_VERSION . " ist aelter als die geforderte Mindestversion " . $argv[1] . " (CVE-2026-109618/109619).\n"); exit(1); } echo "PHP " . PHP_VERSION . " erfuellt Mindestversion " . $argv[1] . "\n";' "$PHP_MIN_VERSION"
 
 # Verzeichnisse (identisch zum HA-Addon)
 RUN mkdir -p /var/www/html \
     && mkdir -p /var/log/nginx \
     && mkdir -p /var/log/php \
+    && mkdir -p /var/log/steinapi \
     && mkdir -p /var/log/supervisord \
     && mkdir -p /run/nginx \
     && mkdir -p /run/mysqld \
@@ -64,24 +74,21 @@ COPY steinapi-addon/rootfs/ /
 # Standalone-Entrypoint (erzeugt /data/options.json aus ENV)
 COPY steinapi-docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# Berechtigungen
+# Berechtigungen (identisch zum HA-Addon: Webroot read-only für nginx/php-fpm)
 RUN chmod +x /etc/services.d/steinapi/run \
     && chmod +x /etc/services.d/steinapi/finish \
     && chmod +x /usr/local/bin/steinapi-init.sh \
     && chmod +x /usr/local/bin/steinapi-cron.sh \
+    && chmod +x /usr/local/bin/steinapi-mariadb.sh \
     && chmod +x /usr/local/bin/docker-entrypoint.sh \
-    && chmod 755 /var/www/html \
-    && chown -R nginx:nginx /var/www/html \
+    && chown -R root:nginx /var/www/html \
+    && find /var/www/html -type d -exec chmod 750 {} \; \
+    && find /var/www/html -type f -exec chmod 640 {} \; \
+    && chown nginx:nginx /var/log/php /var/log/steinapi \
     && chown -R mysql:mysql /var/lib/mysql \
-    && chown -R mysql:mysql /run/mysqld
-
-# PHP-FPM Konfiguration (identisch zum HA-Addon)
-RUN sed -i 's/;clear_env = no/clear_env = no/g' /etc/php83/php-fpm.d/www.conf \
-    && sed -i 's/user = nobody/user = nginx/g' /etc/php83/php-fpm.d/www.conf \
-    && sed -i 's/group = nobody/group = nginx/g' /etc/php83/php-fpm.d/www.conf \
-    && sed -i 's|listen = 127.0.0.1:9000|listen = /run/php-fpm.sock|g' /etc/php83/php-fpm.d/www.conf \
-    && sed -i 's/;listen.owner = nobody/listen.owner = nginx/g' /etc/php83/php-fpm.d/www.conf \
-    && sed -i 's/;listen.group = nobody/listen.group = nginx/g' /etc/php83/php-fpm.d/www.conf
+    && chown -R mysql:mysql /run/mysqld \
+    && php-fpm -t \
+    && echo "${BUILD_VERSION}" > /etc/steinapi-version
 
 # Integrierter Healthcheck (ersetzt den HA-Watchdog)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

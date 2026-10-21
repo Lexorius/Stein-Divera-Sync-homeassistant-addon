@@ -1,0 +1,23 @@
+# Shell-Skripte und Konfigurationen landen 1:1 im Linux-Container.
+# CRLF-Zeilenenden (Windows-Checkout mit core.autocrlf) würden die Shebangs
+# zerstören ("env: can't execute 'bash'"). Deshalb: immer LF.
+* text=auto eol=lf
+
+*.sh      text eol=lf
+*.php     text eol=lf
+*.conf    text eol=lf
+*.ini     text eol=lf
+*.yaml    text eol=lf
+*.yml     text eol=lf
+*.sql     text eol=lf
+*.html    text eol=lf
+*.md      text eol=lf
+*.json    text eol=lf
+*.svg     text eol=lf
+Dockerfile text eol=lf
+steinapi-addon/rootfs/etc/services.d/steinapi/run    text eol=lf
+steinapi-addon/rootfs/etc/services.d/steinapi/finish text eol=lf
+
+*.png     binary
+*.jpg     binary
+*.ico     binary

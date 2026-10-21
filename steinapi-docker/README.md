@@ -8,6 +8,12 @@ Nutzt die **gleiche `rootfs/`-Anwendung wie das HA-Addon** (keine
 Duplikation): Bugfixes und Updates an der PHP-App wirken sich auf beide
 Varianten gleichzeitig aus.
 
+> ⚠️ **Sicherheitsupdate 2.1.0 (21.10.2026):** Basis ist jetzt `alpine:3.24` mit
+> **PHP 8.4.27** (behebt CVE-2026-109618 / CVE-2026-109619). Der Build bricht ab,
+> wenn Alpine eine ältere PHP-Version liefert. Bitte Image neu bauen:
+> `docker compose up -d --build`. Details im
+> [CHANGELOG](../steinapi-addon/CHANGELOG.md).
+
 ## Repo-Struktur
 
 ```
@@ -68,6 +74,10 @@ Trage in `.env` mindestens ein:
 - `STEIN_API_KEY` — dein Stein.app API-Key
 - `STEIN_BUSINESS_UNIT_ID` — ID deiner Einheit
 
+Alle weiteren Variablen (Sync-Richtung, Intervall, Zeitzone, Log-Level,
+Rate-Limit, `DEBUG_ENDPOINTS`) sind in `.env.example` dokumentiert und
+entsprechen 1:1 den Optionen des HA-Addons.
+
 ### 3. Container bauen & starten
 
 ```powershell
@@ -89,6 +99,20 @@ docker compose ps
 ### 4. Öffnen
 
 Browser → <http://localhost:8099>
+
+## Sicherheit
+
+- Die API hat **keine eigene Authentifizierung**. Wer den Port erreicht, kann Syncs
+  auslösen und Logs lesen. Deshalb bindet `docker-compose.yml` den Port standardmäßig
+  nur an `127.0.0.1`. Für Zugriff aus dem LAN `"8099:8099"` eintragen und den Zugriff
+  per Firewall oder Reverse-Proxy mit Login absichern.
+- `DEBUG_ENDPOINTS=false` (Standard) sperrt die Debug-Endpunkte, die Rohdaten
+  beider APIs ausgeben. Nur vorübergehend zur Fehlersuche aktivieren.
+- API-Keys landen beim Start in `/data/options.json` und `config.php` (nur root bzw.
+  nginx-Gruppe lesbar) und werden nicht an php-fpm/nginx-Prozesse vererbt.
+- MariaDB ist nur über den Unix-Socket im Container erreichbar; das Passwort wird
+  beim ersten Start zufällig erzeugt und im Volume abgelegt.
+- Verbindungen zu Divera und Stein.app: nur `https` mit Zertifikatsprüfung.
 
 ## Bedienung
 
@@ -127,7 +151,9 @@ Zustandsdaten liegen im Docker Named Volume **`steinapi-data`**,
 gemountet unter `/data`:
 
 - `/data/mysql/` — MariaDB-Datenverzeichnis
-- `/data/steinapi/` — App-interne Ablage
+- `/data/steinapi/db_password` — zufälliges DB-Passwort (beim ersten Start erzeugt)
+- `/data/steinapi/mariadb_version` — Marker; bei neuer MariaDB-Version läuft
+  automatisch `mariadb-upgrade`
 - `/data/options.json` — wird bei jedem Start aus `.env` neu generiert
 
 Backup des Volumes (PowerShell):
@@ -157,12 +183,12 @@ neu, die PHP-App liest daraus.
 
 ## Port ändern
 
-Standard ist `8099`. Bei Konflikten in `docker-compose.yml` die linke
+Standard ist `127.0.0.1:8099`. Bei Konflikten in `docker-compose.yml` die linke
 Seite ändern:
 
 ```yaml
 ports:
-  - "9000:8099"   # Host-Port 9000 -> Container-Port 8099
+  - "127.0.0.1:9000:8099"   # Host-Port 9000 -> Container-Port 8099
 ```
 
 ## Updates einspielen
@@ -177,7 +203,28 @@ docker compose up -d --build
 Da das Docker-Image beim Build die aktuelle `steinapi-addon/rootfs/`
 einbettet, kommen Änderungen an der PHP-App automatisch mit.
 
+Beim ersten Start nach einem Update auf 2.1.0 migriert der Container die
+bestehende Datenbank automatisch (neues DB-Passwort, `mariadb-upgrade` von
+MariaDB 10.11 auf 11.8). Das dauert einmalig einige Sekunden länger.
+
 ## Troubleshooting
+
+### „FEHLER: PHP x.y.z ist aelter als die geforderte Mindestversion" beim Build
+
+Das Alpine-Paket-Repository liefert noch keine gepatchte PHP-Version. Build
+später wiederholen (`docker compose build --no-cache`). Die Prüfung ist
+absichtlich hart, damit kein Image mit verwundbarem PHP entsteht.
+
+### Cron-Dienst startet nicht: „env: can't execute 'bash'"
+
+Die Shell-Skripte wurden mit Windows-Zeilenenden (CRLF) ausgecheckt. Seit 2.1.0
+erzwingt `.gitattributes` LF. Bei einem älteren Checkout:
+
+```powershell
+git add --renormalize .
+git checkout -- .
+docker compose up -d --build
+```
 
 ### „port is already allocated“ beim Start
 
@@ -221,10 +268,10 @@ docker compose up -d --build
 
 | Aspekt          | HA-Addon                        | Standalone-Container                 |
 | --------------- | ------------------------------- | ------------------------------------ |
-| Basis-Image     | `ghcr.io/home-assistant/*-base` | `alpine:3.19`                        |
+| Basis-Image     | `ghcr.io/home-assistant/*-base:3.24` | `alpine:3.24`                   |
 | Service-Init    | s6-overlay                      | Entrypoint + supervisord             |
 | Konfiguration   | `/data/options.json` von HA     | ENV-Vars → wird zu `options.json`    |
-| UI-Zugriff      | HA Ingress                      | Direktzugriff `http://host:8099`     |
+| UI-Zugriff      | HA Ingress (authentifiziert)    | `http://localhost:8099` (ohne Auth)  |
 | Auto-Update     | HA Supervisor                   | `docker compose up --build`          |
 | PHP-Anwendung   | `steinapi-addon/rootfs/`        | **identisch — shared**               |
 

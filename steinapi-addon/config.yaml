@@ -1,15 +1,12 @@
 ---
 name: "SteinAPI - Divera Sync"
-description: "API + Dashboard für die Synchronisation zwischen Divera24-7 und Stein.app"
-version: "2.0.2"
+description: "API + Dashboard für die Synchronisation des Fahrzeugstatus zwischen Divera24-7 und Stein.app"
+version: "2.1.0"
 slug: "steinapi"
-url: "https://github.com/Lexorius/steinapi"
+url: "https://github.com/Lexorius/Stein-Divera-Sync-homeassistant-addon"
 arch:
   - aarch64
   - amd64
-  - armhf
-  - armv7
-  - i386
 init: false
 ingress: true
 ingress_port: 8099
@@ -24,21 +21,21 @@ hassio_api: false
 options:
   # Webserver Port (intern)
   port: 8099
-  
+
   # Divera Konfiguration
   divera_access_key: ""
   divera_base_url: "https://app.divera247.com/api/v2"
-  
+
   # Stein.app Konfiguration
   stein_api_key: ""
   stein_business_unit_id: ""
   stein_base_url: "https://www.stein.app/api"
-  
+
   # Sync Einstellungen
   sync_interval_minutes: 5
   sync_direction: "both"
   auto_sync_enabled: true
-  
+
   # Erweiterte Einstellungen
   timezone: "Europe/Berlin"
   log_level: "info"
@@ -46,11 +43,14 @@ options:
   rate_limit_requests: 100
   rate_limit_window_seconds: 60
 
+  # Debug-Endpunkte (geben Rohdaten beider APIs aus - nur zur Fehlersuche aktivieren)
+  debug_endpoints: false
+
 schema:
   port: port
-  divera_access_key: str
+  divera_access_key: password
   divera_base_url: url
-  stein_api_key: str
+  stein_api_key: password
   stein_business_unit_id: str
   stein_base_url: url
   sync_interval_minutes: int(1,60)
@@ -61,18 +61,17 @@ schema:
   max_log_entries: int(100,10000)
   rate_limit_requests: int(10,1000)
   rate_limit_window_seconds: int(10,3600)
+  debug_endpoints: bool
 
 # Ports die genutzt werden
+# Standardmäßig deaktiviert: Der Zugriff erfolgt über Ingress (durch HA authentifiziert).
+# Die API selbst hat KEINE Authentifizierung - den Port nur freigeben, wenn das
+# Netzwerk vertrauenswürdig ist.
 ports:
   8099/tcp: null
 
 ports_description:
-  8099/tcp: "SteinAPI Webserver"
-
-# Map für persistente Daten
-map:
-  - addon_config:rw
-  - ssl:ro
+  8099/tcp: "SteinAPI Webserver (ohne Authentifizierung - nur bei Bedarf freigeben)"
 
 # Startup-Reihenfolge
 startup: services

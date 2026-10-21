@@ -618,15 +618,25 @@
                 };
                 
                 Object.entries(fields).forEach(([field, enabled]) => {
+                    // Nur erwartete Feldnamen zulassen (keine HTML-/JS-Injektion über API-Daten)
+                    if (!/^[a-z_]{1,50}$/.test(field)) return;
                     const label = fieldLabels[field] || field;
-                    fieldGrid.innerHTML += `
-                        <div class="field-item">
-                            <input type="checkbox" id="field_${field}" 
-                                   ${enabled ? 'checked' : ''} 
-                                   onchange="updateField('${field}', this.checked)">
-                            <label for="field_${field}">${label}</label>
-                        </div>
-                    `;
+                    const item = document.createElement('div');
+                    item.className = 'field-item';
+
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = 'field_' + field;
+                    checkbox.checked = Boolean(enabled);
+                    checkbox.addEventListener('change', () => updateField(field, checkbox.checked));
+
+                    const labelEl = document.createElement('label');
+                    labelEl.htmlFor = 'field_' + field;
+                    labelEl.textContent = label;
+
+                    item.appendChild(checkbox);
+                    item.appendChild(labelEl);
+                    fieldGrid.appendChild(item);
                 });
             }
         }
@@ -645,13 +655,15 @@
                 container.innerHTML = '';
                 
                 if (data.data.logs && data.data.logs.length > 0) {
+                    const allowedLevels = ['debug', 'info', 'success', 'warning', 'error'];
                     data.data.logs.forEach(log => {
                         const time = new Date(log.timestamp);
+                        const level = allowedLevels.includes(log.level) ? log.level : 'info';
                         container.innerHTML += `
                             <div class="log-entry">
-                                <span class="log-time">${time.toLocaleString('de-DE')}</span>
-                                <span class="log-level ${log.level}">${log.level}</span>
-                                <span class="log-message">${escapeHtml(log.message)}</span>
+                                <span class="log-time">${escapeHtml(time.toLocaleString('de-DE'))}</span>
+                                <span class="log-level ${level}">${escapeHtml(String(log.level))}</span>
+                                <span class="log-message">${escapeHtml(String(log.message))}</span>
                             </div>
                         `;
                     });
@@ -690,7 +702,12 @@
                 btn.innerHTML = '<span>⚡</span> Jetzt synchronisieren';
                 
                 if (data && data.success) {
-                    showToast('Synchronisation erfolgreich!', 'success');
+                    const r = data.data || {};
+                    if (r.success === false) {
+                        showToast('Synchronisation mit Fehlern: ' + (r.error || 'siehe Log'), 'warning');
+                    } else {
+                        showToast(`Synchronisation erfolgreich (${r.updated ?? 0} aktualisiert, ${r.skipped ?? 0} unverändert)`, 'success');
+                    }
                     loadStats();
                     loadLogs();
                 } else {

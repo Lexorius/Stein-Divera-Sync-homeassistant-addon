@@ -22,7 +22,7 @@
     },
     "stein_base_url": {
       "name": "Stein.app API URL",
-      "description": "The base URL of the Stein.app API (default: https://api.stein.app/v1)"
+      "description": "The base URL of the Stein.app API (default: https://www.stein.app/api, https only)"
     },
     "sync_interval_minutes": {
       "name": "Sync Interval (Minutes)",
@@ -55,6 +55,10 @@
     "rate_limit_window_seconds": {
       "name": "Rate Limit Window (Seconds)",
       "description": "Time window for rate limiting"
+    },
+    "debug_endpoints": {
+      "name": "Enable debug endpoints",
+      "description": "Enables the debug endpoints (debug, compareData, rawDivera, rawStein, testSteinRaw). They expose raw data of both APIs without authentication - enable only temporarily for troubleshooting!"
     }
   }
 }

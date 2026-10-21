@@ -73,4 +73,4 @@ ON DUPLICATE KEY UPDATE name = name;
 
 -- Initial log entry
 INSERT INTO sync_logs (level, message, context) VALUES 
-    ('info', 'SteinAPI initialized', '{"version": "1.0.0"}');
+    ('info', 'SteinAPI initialized', '{"version": "2.1.0"}');

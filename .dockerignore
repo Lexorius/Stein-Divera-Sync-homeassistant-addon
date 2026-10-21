@@ -1,10 +1,11 @@
 # Am Repo-Root, weil Docker-Build-Context hier anfängt (context: ..).
 # Alles außer dem, was das Image wirklich braucht, ausschließen.
 
-# Git
+# Git / Tooling
 .git
 .gitignore
 .github
+.claude
 
 # Docs
 *.md

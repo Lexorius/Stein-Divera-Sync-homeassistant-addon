@@ -3,7 +3,8 @@ set -e
 
 echo "============================================"
 echo "SteinAPI Home Assistant Add-on"
-echo "Version: 1.0.0"
+echo "Version: $(cat /etc/steinapi-version 2>/dev/null || echo unbekannt)"
+echo "$(php -v 2>/dev/null | head -n1 || echo 'PHP: unbekannt')"
 echo "============================================"
 
 # Führe Initialisierung aus

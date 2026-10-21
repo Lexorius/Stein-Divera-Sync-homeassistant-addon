@@ -128,7 +128,7 @@ class SyncService {
                 $needsSync = false;
                 
                 // Vergleiche Status
-                $expectedFms = DiveraService::FMS_STEIN_MAP[$steinAsset['status']] ?? 6;
+                $expectedFms = DiveraService::FMS_STEIN_MAP[$steinAsset['status'] ?? ''] ?? 6;
                 $currentFms = $diveraAsset['fmsstatus'] ?? 0;
                 
                 if ($currentFms != $expectedFms) {
@@ -200,8 +200,8 @@ class SyncService {
     private function performSync(array $diveraAsset, array $steinAsset, string $direction): array {
         $result = [
             'vehicle' => $diveraAsset['name'] ?? $diveraAsset['number'] ?? 'unknown',
-            'divera_id' => $diveraAsset['id'],
-            'stein_id' => $steinAsset['id'],
+            'divera_id' => $diveraAsset['id'] ?? null,
+            'stein_id' => $steinAsset['id'] ?? null,
             'action' => null,
             'success' => false,
             'fields_synced' => []
@@ -251,7 +251,7 @@ class SyncService {
                 // Stein -> Divera
                 $this->logger->info('Syncing Stein to Divera', ['vehicle' => $result['vehicle']]);
                 
-                $success = $this->divera->setVehicleStatus($diveraAsset['id'], $steinAsset);
+                $success = $this->divera->setVehicleStatus((string)($diveraAsset['id'] ?? ''), $steinAsset);
                 
                 $result['action'] = 'stein_to_divera';
                 $result['success'] = $success;
@@ -262,14 +262,14 @@ class SyncService {
                 $this->logger->info('Syncing Divera to Stein', ['vehicle' => $result['vehicle']]);
                 
                 // Mappe FMS Status zu Stein Status
-                $steinStatus = DiveraService::FMS_STEIN_MAP[$diveraAsset['fmsstatus']] ?? 'notready';
-                
+                $steinStatus = DiveraService::FMS_STEIN_MAP[$diveraAsset['fmsstatus'] ?? 0] ?? 'notready';
+
                 $payload = [
                     'status' => $steinStatus,
                     'comment' => $diveraAsset['fmsstatus_note'] ?? ''
                 ];
-                
-                $success = $this->stein->updateAsset($steinAsset['id'], $payload);
+
+                $success = $this->stein->updateAsset((string)($steinAsset['id'] ?? ''), $payload);
                 
                 $result['action'] = 'divera_to_stein';
                 $result['success'] = $success;

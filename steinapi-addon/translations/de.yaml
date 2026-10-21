@@ -22,7 +22,7 @@
     },
     "stein_base_url": {
       "name": "Stein.app API URL",
-      "description": "Die Basis-URL der Stein.app API (Standard: https://api.stein.app/v1)"
+      "description": "Die Basis-URL der Stein.app API (Standard: https://www.stein.app/api, nur https)"
     },
     "sync_interval_minutes": {
       "name": "Sync-Intervall (Minuten)",
@@ -55,6 +55,10 @@
     "rate_limit_window_seconds": {
       "name": "Rate Limit Zeitfenster (Sekunden)",
       "description": "Zeitfenster für das Rate Limiting"
+    },
+    "debug_endpoints": {
+      "name": "Debug-Endpunkte aktivieren",
+      "description": "Schaltet die Debug-Endpunkte (debug, compareData, rawDivera, rawStein, testSteinRaw) frei. Diese geben Rohdaten beider APIs ohne Authentifizierung aus - nur vorübergehend zur Fehlersuche aktivieren!"
     }
   }
 }
