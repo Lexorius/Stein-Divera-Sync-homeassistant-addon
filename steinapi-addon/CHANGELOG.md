@@ -5,6 +5,23 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.1] - 2026-11-15
+
+### Hinzugefügt
+- **Aktivitätsprotokoll zeigt Details**: Einträge mit Kontext lassen sich aufklappen. Bei
+  „Sync decision" stehen dort beide Werte, der letzte gemeinsame Stand, die Zeitstempel und die
+  gewählte Richtung. Bisher zeigte das Dashboard nur die Überschrift.
+- Kurzfassung direkt in der Zeile (Fahrzeug und Aktion, Fehlerursache, Zählerstände).
+- Auswahl der Anzahl (50, 200, 500 Einträge) und Schalter „Debug ausblenden".
+- Aufgeklappte Einträge bleiben beim automatischen Neuladen offen.
+
+### Behoben
+- Einträge derselben Sekunde erscheinen in stabiler Reihenfolge (Sortierung zusätzlich nach ID).
+- Stufe `debug` hatte im Protokoll keine eigene Farbe.
+
+### Geändert
+- Das Protokoll wird per DOM-API aufgebaut statt über `innerHTML`.
+
 ## [2.2.0] - 2026-11-15
 
 **Überarbeitung der Synchronisationslogik.** Status und Notiz wurden in mehreren Situationen

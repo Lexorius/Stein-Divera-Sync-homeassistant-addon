@@ -1,6 +1,6 @@
 # SteinAPI Home Assistant Add-on
 
-![Version](https://img.shields.io/badge/version-2.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.1-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![PHP](https://img.shields.io/badge/PHP-8.4.27-777bb4)
@@ -150,6 +150,12 @@ Nach dem Start ist das Dashboard über die Home Assistant Seitenleiste erreichba
 Das Dashboard zeigt letzten Sync-Zeitpunkt, Anzahl synchronisierter Fahrzeuge, Fehlerzähler
 (24 h), nächste geplante Synchronisation, manuelle Sync-Steuerung und das Aktivitätsprotokoll.
 
+**Aktivitätsprotokoll:** Einträge mit ▸ lassen sich aufklappen und zeigen die Details. Bei
+`log_level: debug` steht zu jedem Fahrzeug ein Eintrag **Sync decision** mit beiden Werten, dem
+letzten gemeinsamen Stand, den Zeitstempeln und der gewählten Richtung. Die Kurzfassung in der
+Zeile nennt Fahrzeug und Aktion. Über „Einträge" lassen sich bis zu 500 Zeilen laden, „Debug
+ausblenden" reduziert die Liste auf Meldungen ab Stufe `info`.
+
 ## 🔄 API-Endpunkte
 
 | Endpunkt | Methode | Beschreibung |
@@ -224,8 +230,9 @@ Systemtabellen automatisch migriert.
 3. Vorübergehend `debug_endpoints: true` setzen und `/api.php?action=compareData` aufrufen
 
 ### Status oder Notiz wird nicht übernommen
-1. `log_level: debug` setzen. Der Log-Eintrag **Sync decision** zeigt je Fahrzeug beide Werte,
-   den letzten gemeinsamen Stand und die gewählte Richtung
+1. `log_level: debug` setzen und im Aktivitätsprotokoll den Eintrag **Sync decision** des
+   Fahrzeugs aufklappen. Er zeigt beide Werte, den letzten gemeinsamen Stand und die gewählte
+   Richtung. Danach `log_level` wieder auf `info` stellen
 2. Steht das Fahrzeug in Divera auf Status 0, 5, 7, 8 oder 9, wird der Status nicht übertragen
    und eine Notiz aus Stein.app zurückgestellt (siehe „So funktioniert die Synchronisation")
 3. Fehlgeschlagene Schreibzugriffe stehen mit Ursache im Aktivitätslog und werden im nächsten

@@ -61,7 +61,7 @@ class Logger {
             return $this->db->query(
                 "SELECT id, level, message, context, timestamp 
                  FROM sync_logs 
-                 ORDER BY timestamp DESC 
+                 ORDER BY timestamp DESC, id DESC 
                  LIMIT ?",
                 [$limit]
             );
@@ -78,7 +78,7 @@ class Logger {
                 "DELETE FROM sync_logs 
                  WHERE id NOT IN (
                      SELECT id FROM (
-                         SELECT id FROM sync_logs ORDER BY timestamp DESC LIMIT ?
+                         SELECT id FROM sync_logs ORDER BY timestamp DESC, id DESC LIMIT ?
                      ) AS keep
                  )",
                 [$maxEntries]

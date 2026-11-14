@@ -322,11 +322,120 @@
             font-size: 13px;
         }
         
-        .log-entry {
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        .logs-tools {
             display: flex;
-            gap: 15px;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .logs-tools label {
+            font-size: 13px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        .logs-tools select {
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 6px 8px;
+            font: inherit;
+        }
+
+        .logs-hint {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin: -8px 0 12px;
+        }
+
+        .log-entry {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .log-row {
+            padding: 8px 0;
+            display: flex;
+            gap: 12px;
+            align-items: baseline;
+        }
+
+        summary.log-row {
+            cursor: pointer;
+            list-style: none;
+        }
+
+        summary.log-row::-webkit-details-marker {
+            display: none;
+        }
+
+        summary.log-row:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        summary.log-row:focus-visible {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        .log-toggle {
+            flex: none;
+            width: 10px;
+            color: var(--text-muted);
+            display: inline-block;
+            transition: transform 0.15s;
+        }
+
+        details[open] > summary .log-toggle {
+            transform: rotate(90deg);
+        }
+
+        .log-summary {
+            color: var(--text-muted);
+            margin-left: 8px;
+        }
+
+        .log-details {
+            margin: 0 0 10px 22px;
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.25);
+            border-left: 2px solid var(--border-color);
+            border-radius: 6px;
+            display: grid;
+            grid-template-columns: max-content 1fr;
+            gap: 4px 16px;
+        }
+
+        .log-details dt {
+            color: var(--text-muted);
+        }
+
+        .log-details dd {
+            margin: 0;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+
+        @media (max-width: 600px) {
+            .log-row {
+                flex-wrap: wrap;
+                gap: 4px 10px;
+            }
+            .log-message {
+                flex-basis: 100%;
+            }
+            .log-details {
+                grid-template-columns: 1fr;
+                margin-left: 0;
+            }
+            .log-details dt {
+                margin-top: 6px;
+            }
         }
         
         .log-entry:last-child {
@@ -346,6 +455,7 @@
             text-transform: uppercase;
         }
         
+        .log-level.debug { background: rgba(160, 160, 160, 0.15); color: var(--text-muted); }
         .log-level.info { background: rgba(3, 169, 244, 0.2); color: var(--primary-color); }
         .log-level.success { background: rgba(76, 175, 80, 0.2); color: var(--success-color); }
         .log-level.warning { background: rgba(255, 152, 0, 0.2); color: var(--warning-color); }
@@ -491,10 +601,25 @@
         <div class="logs-panel">
             <div class="logs-header">
                 <h2>📋 Aktivitätslog</h2>
-                <button class="btn" style="background: transparent; border: 1px solid var(--border-color);" onclick="loadLogs()">
-                    Aktualisieren
-                </button>
+                <div class="logs-tools">
+                    <label>
+                        <input type="checkbox" id="logHideDebug" onchange="hideDebugLogs = this.checked; renderLogs();">
+                        Debug ausblenden
+                    </label>
+                    <label>
+                        Einträge
+                        <select id="logLimit" onchange="logLimit = parseInt(this.value, 10) || 50; loadLogs();">
+                            <option value="50" selected>50</option>
+                            <option value="200">200</option>
+                            <option value="500">500</option>
+                        </select>
+                    </label>
+                    <button class="btn" style="background: transparent; border: 1px solid var(--border-color);" onclick="loadLogs()">
+                        Aktualisieren
+                    </button>
+                </div>
             </div>
+            <p class="logs-hint">Einträge mit ▸ lassen sich aufklappen und zeigen die Details, z. B. bei „Sync decision" beide Werte, den letzten gemeinsamen Stand und die gewählte Richtung.</p>
             <div class="logs-container" id="logsContainer">
                 <!-- Wird dynamisch gefüllt -->
             </div>
@@ -648,31 +773,217 @@
             }
         }
         
+        // --- Aktivitätslog ---------------------------------------------------
+        let logLimit = 50;
+        let hideDebugLogs = false;
+        let lastLogs = [];
+        const openLogIds = new Set();   // aufgeklappte Einträge überleben das Auto-Refresh
+
+        const LOG_KEY_LABELS = {
+            vehicle: 'Fahrzeug',
+            stein_status: 'Status Stein',
+            divera_fms: 'Status Divera (FMS)',
+            base_status: 'Letzter gemeinsamer Status',
+            stein_comment: 'Kommentar Stein',
+            divera_note: 'Notiz Divera',
+            base_comment: 'Letzte gemeinsame Notiz',
+            stein_ts: 'Zeitstempel Stein',
+            divera_ts: 'Zeitstempel Divera',
+            to_divera: 'Wird nach Divera geschrieben',
+            to_stein: 'Wird nach Stein geschrieben',
+            fields: 'Felder',
+            error: 'Fehler',
+            stein_name: 'Kennzeichen in Stein'
+        };
+
+        // Feldnamen, wie sie der Sync intern verwendet
+        const LOG_FIELD_LABELS = { status: 'Status', comment: 'Notiz' };
+        const LOG_FIELD_LIST_KEYS = ['to_divera', 'to_stein', 'fields', 'fields_synced'];
+        const fieldLabel = f => LOG_FIELD_LABELS[f] || String(f);
+
         async function loadLogs() {
-            const data = await apiCall('logs&limit=50');
+            const data = await apiCall('logs&limit=' + encodeURIComponent(logLimit));
             if (data && data.success) {
-                const container = document.getElementById('logsContainer');
-                container.innerHTML = '';
-                
-                if (data.data.logs && data.data.logs.length > 0) {
-                    const allowedLevels = ['debug', 'info', 'success', 'warning', 'error'];
-                    data.data.logs.forEach(log => {
-                        const time = new Date(log.timestamp);
-                        const level = allowedLevels.includes(log.level) ? log.level : 'info';
-                        container.innerHTML += `
-                            <div class="log-entry">
-                                <span class="log-time">${escapeHtml(time.toLocaleString('de-DE'))}</span>
-                                <span class="log-level ${level}">${escapeHtml(String(log.level))}</span>
-                                <span class="log-message">${escapeHtml(String(log.message))}</span>
-                            </div>
-                        `;
-                    });
-                } else {
-                    container.innerHTML = '<div class="log-entry"><span class="log-message">Keine Logs vorhanden</span></div>';
-                }
+                lastLogs = Array.isArray(data.data?.logs) ? data.data.logs : [];
+                renderLogs();
             }
         }
-        
+
+        /** Kontext kommt als JSON-String aus der Datenbank. Gibt ein Objekt oder null zurück. */
+        function parseLogContext(raw) {
+            if (raw === null || raw === undefined || raw === '') {
+                return null;
+            }
+            let ctx = raw;
+            if (typeof raw === 'string') {
+                try {
+                    ctx = JSON.parse(raw);
+                } catch (e) {
+                    return { Rohdaten: raw };
+                }
+            }
+            if (ctx === null || typeof ctx !== 'object') {
+                return null;
+            }
+            if (Array.isArray(ctx)) {
+                return ctx.length ? { Werte: ctx } : null;
+            }
+            return Object.keys(ctx).length ? ctx : null;
+        }
+
+        function formatLogValue(key, value) {
+            if (value === null || value === undefined) {
+                return '–';
+            }
+            if (typeof value === 'string') {
+                return value === '' ? '(leer)' : value;
+            }
+            if (typeof value === 'number' && /_ts$/.test(key)) {
+                return value > 0 ? `${new Date(value * 1000).toLocaleString('de-DE')} (${value})` : '(kein Zeitstempel)';
+            }
+            if (Array.isArray(value)) {
+                if (value.length === 0) {
+                    return '(nichts)';
+                }
+                if (value.every(v => v === null || typeof v !== 'object')) {
+                    return (LOG_FIELD_LIST_KEYS.includes(key) ? value.map(fieldLabel) : value).join(', ');
+                }
+            }
+            if (typeof value === 'object') {
+                return JSON.stringify(value, null, 2);
+            }
+            return String(value);
+        }
+
+        /** Einzeilige Kurzfassung für die häufigsten Meldungen. */
+        function summarizeLog(message, ctx) {
+            if (!ctx) {
+                return '';
+            }
+            const list = a => (Array.isArray(a) && a.length ? a.map(fieldLabel).join(', ') : '');
+            const join = parts => parts.filter(p => p !== null && p !== undefined && p !== '' && p !== false).join(' · ');
+
+            switch (message) {
+                case 'Sync decision': {
+                    const toDivera = list(ctx.to_divera);
+                    const toStein = list(ctx.to_stein);
+                    return join([
+                        ctx.vehicle,
+                        toDivera && '→ Divera: ' + toDivera,
+                        toStein && '→ Stein: ' + toStein,
+                        !toDivera && !toStein && 'keine Änderung'
+                    ]);
+                }
+                case 'Syncing Stein to Divera':
+                case 'Syncing Divera to Stein':
+                    return join([ctx.vehicle, list(ctx.fields)]);
+                case 'Sync failed for vehicle':
+                    return join([ctx.vehicle, ctx.error]);
+                case 'No matching Divera asset for Stein':
+                    return join([ctx.stein_name]);
+                case 'Comment to Divera deferred: Divera status has no Stein equivalent':
+                    return join([ctx.vehicle, 'FMS ' + ctx.divera_fms]);
+                case 'Fetched data':
+                    return `Divera ${ctx.divera_count ?? '?'} · Stein ${ctx.stein_count ?? '?'}`;
+                case 'Indexed assets':
+                    return `Divera ${ctx.divera_indexed ?? '?'} · Stein ${ctx.stein_indexed ?? '?'}`;
+                case 'Sync completed':
+                    return `${ctx.updated ?? 0} aktualisiert · ${ctx.skipped ?? 0} unverändert · ${ctx.errors ?? 0} Fehler`;
+                case 'Stein asset':
+                    return join([ctx.name, ctx.status]);
+                case 'Divera vehicle':
+                    return join([ctx.number, ctx.name, 'FMS ' + ctx.fmsstatus]);
+                default:
+                    return '';
+            }
+        }
+
+        function logSpan(className, text) {
+            const span = document.createElement('span');
+            span.className = className;
+            span.textContent = text;
+            return span;
+        }
+
+        /**
+         * Baut das Log per DOM-API auf (textContent, kein innerHTML): Meldungen
+         * und Kontext enthalten Fahrzeugnamen und Notizen aus Divera/Stein.
+         */
+        function renderLogs() {
+            const container = document.getElementById('logsContainer');
+            const allowedLevels = ['debug', 'info', 'success', 'warning', 'error'];
+            const logs = hideDebugLogs ? lastLogs.filter(l => l.level !== 'debug') : lastLogs;
+            const fragment = document.createDocumentFragment();
+
+            if (logs.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'log-entry';
+                const row = document.createElement('div');
+                row.className = 'log-row';
+                row.appendChild(logSpan('log-message', lastLogs.length ? 'Keine Einträge außer Debug vorhanden' : 'Keine Logs vorhanden'));
+                empty.appendChild(row);
+                fragment.appendChild(empty);
+            }
+
+            logs.forEach(log => {
+                const level = allowedLevels.includes(log.level) ? log.level : 'info';
+                const ctx = parseLogContext(log.context);
+                const message = String(log.message ?? '');
+                const id = String(log.id ?? '');
+
+                const entry = document.createElement(ctx ? 'details' : 'div');
+                entry.className = 'log-entry';
+
+                const row = document.createElement(ctx ? 'summary' : 'div');
+                row.className = 'log-row';
+                row.appendChild(logSpan('log-toggle', ctx ? '▸' : ''));
+                row.appendChild(logSpan('log-time', new Date(log.timestamp).toLocaleString('de-DE')));
+                row.appendChild(logSpan('log-level ' + level, String(log.level ?? '')));
+
+                const messageSpan = logSpan('log-message', message);
+                const summary = summarizeLog(message, ctx);
+                if (summary) {
+                    messageSpan.appendChild(logSpan('log-summary', summary));
+                }
+                row.appendChild(messageSpan);
+                entry.appendChild(row);
+
+                if (ctx) {
+                    const details = document.createElement('dl');
+                    details.className = 'log-details';
+                    Object.keys(ctx).forEach(key => {
+                        const dt = document.createElement('dt');
+                        dt.textContent = LOG_KEY_LABELS[key] || key;
+                        const dd = document.createElement('dd');
+                        dd.textContent = formatLogValue(key, ctx[key]);
+                        details.appendChild(dt);
+                        details.appendChild(dd);
+                    });
+                    entry.appendChild(details);
+
+                    if (id && openLogIds.has(id)) {
+                        entry.open = true;
+                    }
+                    entry.addEventListener('toggle', () => {
+                        if (!id) {
+                            return;
+                        }
+                        if (entry.open) {
+                            openLogIds.add(id);
+                        } else {
+                            openLogIds.delete(id);
+                        }
+                    });
+                }
+
+                fragment.appendChild(entry);
+            });
+
+            const scrollTop = container.scrollTop;
+            container.replaceChildren(fragment);
+            container.scrollTop = scrollTop;
+        }
+
         async function startSync() {
             const btn = document.getElementById('syncBtn');
             const progressBar = document.getElementById('progressBar');
