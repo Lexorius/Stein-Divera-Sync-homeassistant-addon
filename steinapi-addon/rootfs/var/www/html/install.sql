@@ -57,6 +57,17 @@ INSERT INTO field_config (id, config) VALUES (1, '{
     "name": false
 }') ON DUPLICATE KEY UPDATE id = id;
 
+-- Zuletzt synchronisierter Stand je Fahrzeug (Schlüssel = Kennzeichen).
+-- Grundlage für den feldweisen Abgleich: nur wer vom letzten gemeinsamen Stand
+-- abweicht, hat geändert. Bei bestehenden Installationen legt der Sync die
+-- Tabelle beim ersten Lauf selbst an.
+CREATE TABLE IF NOT EXISTS sync_state (
+    vehicle_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL PRIMARY KEY,
+    last_status VARCHAR(20) NULL,
+    last_comment TEXT NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Settings Table
 CREATE TABLE IF NOT EXISTS settings (
     name VARCHAR(100) PRIMARY KEY,
@@ -73,4 +84,4 @@ ON DUPLICATE KEY UPDATE name = name;
 
 -- Initial log entry
 INSERT INTO sync_logs (level, message, context) VALUES 
-    ('info', 'SteinAPI initialized', '{"version": "2.1.0"}');
+    ('info', 'SteinAPI initialized', '{"version": "2.2.0"}');

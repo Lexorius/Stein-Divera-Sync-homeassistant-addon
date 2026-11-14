@@ -40,7 +40,7 @@ siehe [steinapi-docker/README.md](./steinapi-docker/README.md).
 
 ### [SteinAPI - Divera Sync](./steinapi-addon)
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![PHP](https://img.shields.io/badge/PHP-8.4.27-777bb4)
@@ -50,7 +50,8 @@ API + Dashboard für die bidirektionale Synchronisation des Fahrzeugstatus zwisc
 und **Stein.app**. Die Zuordnung der Fahrzeuge erfolgt über das **Kennzeichen**.
 
 **Features:**
-- ✅ Synchronisation von FMS-Status und Statusnotiz in beide Richtungen (oder nur eine)
+- ✅ Synchronisation von FMS-Status und Statusnotiz in beide Richtungen (oder nur eine),
+  feldweise gegen den zuletzt synchronisierten Stand - Änderungen auf beiden Seiten gehen nicht verloren
 - ✅ Automatische Synchronisation in konfigurierbarem Intervall (1-60 Minuten)
 - ✅ Webbasiertes Dashboard mit Statistiken und Aktivitätslog
 - ✅ Home Assistant Ingress-Integration (Zugriff durch HA authentifiziert)

@@ -5,6 +5,49 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.0] - 2026-11-15
+
+**Überarbeitung der Synchronisationslogik.** Status und Notiz wurden in mehreren Situationen
+nicht sauber übertragen oder gegenseitig überschrieben.
+
+### Behoben
+- **Feldweiser Abgleich statt „ganzes Fahrzeug, jüngerer Zeitstempel gewinnt"**: Status und Notiz
+  werden getrennt gegen den zuletzt synchronisierten Stand verglichen (neue Tabelle `sync_state`).
+  Eine Statusänderung in Divera überschreibt nicht mehr eine kurz zuvor in Stein.app geänderte
+  Notiz - und umgekehrt. Der Zeitstempel entscheidet nur noch bei echten Konflikten.
+- Kein Rück-Sync mehr durch Zeitstempel, die der Sync selbst verursacht hat. Bisher wurde jeder
+  Wert, der sich nicht verlustfrei abbilden lässt, im nächsten Lauf in Gegenrichtung zurückgeschrieben.
+- **Sprechwunsch setzte das Fahrzeug auf „nicht einsatzbereit"**: Ein Divera-Status ohne
+  Stein-Entsprechung (0, 5, 7, 8, 9) wurde als `notready` nach Stein.app geschrieben und im
+  nächsten Lauf als FMS 6 zurück nach Divera. Solche Status werden jetzt nicht mehr übertragen;
+  die Notiz kommt trotzdem in Stein.app an.
+- **FMS 4 wurde auf 3 zurückgesetzt**, weil beide in Stein.app `inuse` sind. Der Statusvergleich
+  erfolgt jetzt in Stein-Begriffen, gleichwertige Status werden nicht überschrieben.
+- Stein-Status `maint` kippte bei einer Notizänderung aus Divera auf `notready`.
+- Eine in Stein.app gelöschte Notiz wird jetzt auch in Divera gelöscht. Bisher wurde die leere
+  Notiz nicht gesendet und die alte kam im nächsten Lauf nach Stein.app zurück.
+- Mehrzeilige Stein-Kommentare: Zeilenumbrüche (`\r\n`, `\r`, `\n`) werden für Divera einheitlich zu
+  Leerzeichen. Der Kommentar gilt als gleich zu seiner einzeiligen Divera-Fassung und wird in
+  Stein.app nicht mehr umgeschrieben.
+- Notizvergleich ist jetzt exakt (`"007"` und `"7"` galten als gleich).
+- **Sperre gegen parallele Läufe**: Cron, Dashboard und externe Aufrufe konnten gleichzeitig
+  synchronisieren. Ein zweiter Lauf wird jetzt übersprungen (`busy: true` in der Antwort).
+- Fehlermeldungen einzelner Fahrzeuge enthalten jetzt die Ursache (`Divera: …` / `Stein: …`).
+
+### Hinzugefügt
+- `tests/sync_simulation.php`: spielt 16 Sync-Fälle ohne echte APIs und ohne Datenbank durch
+  (`php tests/sync_simulation.php`).
+- Debug-Log-Eintrag „Sync decision" je Fahrzeug mit beiden Werten, letztem Stand und Zeitstempeln
+  (nur bei `log_level: debug`).
+
+### Hinweise zum Update
+- Die Tabelle `sync_state` wird beim ersten Sync automatisch angelegt.
+- Im ersten Lauf nach dem Update gibt es noch keinen gespeicherten Stand; dort entscheidet
+  einmalig der Zeitstempel wie bisher.
+- Steht ein Fahrzeug in Divera auf einem Status ohne Stein-Entsprechung, wird eine Notiz aus
+  Stein.app erst übertragen, wenn der Status wieder zuordenbar ist. So wird z. B. ein Sprechwunsch
+  nicht erneut ausgelöst.
+
 ## [2.1.0] - 2026-10-21
 
 **Sicherheitsrelease - Update dringend empfohlen.**

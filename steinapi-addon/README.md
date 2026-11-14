@@ -1,6 +1,6 @@
 # SteinAPI Home Assistant Add-on
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.2.0-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![PHP](https://img.shields.io/badge/PHP-8.4.27-777bb4)
@@ -15,7 +15,7 @@ API + Dashboard für die Synchronisation des **Fahrzeugstatus** zwischen **Diver
 ## 📋 Funktionen
 
 - ✅ Synchronisation des **FMS-Status** und der **Statusnotiz** zwischen Divera24-7 und Stein.app
-- ✅ Richtung wählbar: beide Richtungen (neuerer Zeitstempel gewinnt), nur Divera → Stein, nur Stein → Divera
+- ✅ Richtung wählbar: beide Richtungen (feldweiser Abgleich, siehe unten), nur Divera → Stein, nur Stein → Divera
 - ✅ Automatische Synchronisation in konfigurierbaren Intervallen (1-60 Minuten)
 - ✅ Webbasiertes Dashboard mit Statistiken, manueller Sync-Steuerung und Aktivitätslog
 - ✅ Vollständige Home Assistant Ingress-Integration
@@ -42,6 +42,29 @@ wird synchronisiert, wenn das Kennzeichen in beiden Systemen **identisch** gesch
 | 2 | `ready` | | `semiready` | 1 |
 | 3, 4 | `inuse` | | `inuse` | 3 |
 | 6 | `notready` | | `notready`, `maint` | 6 |
+
+**Abgleich in beide Richtungen (seit 2.2.0):**
+
+Status und Notiz werden getrennt verglichen, jeweils gegen den zuletzt synchronisierten Stand des
+Fahrzeugs (Tabelle `sync_state`):
+
+- Hat sich ein Feld nur in Stein.app geändert, geht es nach Divera.
+- Hat es sich nur in Divera geändert, geht es nach Stein.app.
+- Wurde es auf beiden Seiten geändert, gewinnt die jüngere Änderung.
+
+Besonderheiten:
+
+- Gleichwertige Status werden nicht überschrieben: FMS 4 bleibt in Divera 4, `maint` bleibt in
+  Stein.app `maint`.
+- Divera-Status **0, 5, 7, 8 und 9** haben in Stein.app keine Entsprechung. Der Status wird dann
+  nicht übertragen. Die Notiz geht weiterhin von Divera nach Stein.app; in Gegenrichtung wartet
+  sie, bis der Status wieder zuordenbar ist, damit z. B. ein Sprechwunsch nicht erneut gesendet wird.
+- Divera-Notizen sind einzeilig. Ein mehrzeiliger Stein-Kommentar steht in Divera mit Leerzeichen
+  statt Zeilenumbrüchen und bleibt in Stein.app unverändert.
+- Eine gelöschte Notiz wird auf der anderen Seite ebenfalls gelöscht.
+- Es läuft immer nur eine Synchronisation gleichzeitig; ein paralleler Aufruf wird übersprungen.
+- Im ersten Lauf nach Installation oder Update gibt es noch keinen gespeicherten Stand. Dort
+  entscheidet einmalig der Zeitstempel für das jeweilige Feld.
 
 ## 🚀 Installation
 
@@ -199,6 +222,14 @@ Systemtabellen automatisch migriert.
 1. Kennzeichen in Divera (`number`) und Stein.app (`name`) müssen identisch sein
 2. Stein.app-Asset muss in Gruppe 1 oder 5 liegen
 3. Vorübergehend `debug_endpoints: true` setzen und `/api.php?action=compareData` aufrufen
+
+### Status oder Notiz wird nicht übernommen
+1. `log_level: debug` setzen. Der Log-Eintrag **Sync decision** zeigt je Fahrzeug beide Werte,
+   den letzten gemeinsamen Stand und die gewählte Richtung
+2. Steht das Fahrzeug in Divera auf Status 0, 5, 7, 8 oder 9, wird der Status nicht übertragen
+   und eine Notiz aus Stein.app zurückgestellt (siehe „So funktioniert die Synchronisation")
+3. Fehlgeschlagene Schreibzugriffe stehen mit Ursache im Aktivitätslog und werden im nächsten
+   Lauf wiederholt
 
 ### HTTP 429 im Dashboard
 Das Rate-Limit greift. `rate_limit_requests` erhöhen oder weniger Clients gleichzeitig nutzen.

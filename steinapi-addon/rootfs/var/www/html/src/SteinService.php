@@ -14,10 +14,18 @@ class SteinService {
     private $logger;
     private $lastRequestTime = 0;
     private $assets = [];  // Cache für Assets
+    private $lastError = null;
 
     public function __construct(array $config, Logger $logger) {
         $this->config = $config;
         $this->logger = $logger;
+    }
+
+    /**
+     * Fehlermeldung des letzten fehlgeschlagenen updateAsset(), sonst null.
+     */
+    public function getLastError(): ?string {
+        return $this->lastError;
     }
 
     /**
@@ -112,7 +120,10 @@ class SteinService {
             'updateData' => $updateData
         ]);
 
+        $this->lastError = null;
+
         if (!preg_match('/^[A-Za-z0-9_-]{1,64}$/', $assetId)) {
+            $this->lastError = 'Invalid Stein asset id';
             $this->logger->error('Invalid Stein asset id', ['assetId' => $assetId]);
             return false;
         }
@@ -131,6 +142,7 @@ class SteinService {
             }
 
             if (!$assetData) {
+                $this->lastError = "Asset $assetId not found";
                 $this->logger->error('Asset not found', ['assetId' => $assetId]);
                 return false;
             }
@@ -157,6 +169,7 @@ class SteinService {
             return true;
 
         } catch (Exception $e) {
+            $this->lastError = $e->getMessage();
             $this->logger->error("Failed to update asset $assetId: " . $e->getMessage());
             return false;
         }
@@ -250,8 +263,9 @@ class SteinService {
     /**
      * HTTP Request an Stein API
      * Basiert auf Original makeRequest()
+     * (protected, damit tests/sync_simulation.php die Gegenstelle ersetzen kann)
      */
-    private function request(string $method, string $endpoint, ?array $data = null): array {
+    protected function request(string $method, string $endpoint, ?array $data = null): array {
         // Rate Limiting anwenden
         $this->rateLimit();
 

@@ -13,6 +13,7 @@ README.md
 
 # Repo-interne Dateien
 repository.json
+tests
 
 # Standalone-Docker: nur der Entrypoint wird gebraucht, nicht .env/compose
 steinapi-docker/.env

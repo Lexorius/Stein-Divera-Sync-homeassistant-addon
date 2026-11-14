@@ -703,8 +703,12 @@
                 
                 if (data && data.success) {
                     const r = data.data || {};
-                    if (r.success === false) {
+                    if (r.busy) {
+                        showToast('Es läuft bereits eine Synchronisation. Dieser Lauf wurde übersprungen.', 'warning');
+                    } else if (r.success === false) {
                         showToast('Synchronisation mit Fehlern: ' + (r.error || 'siehe Log'), 'warning');
+                    } else if ((r.errors ?? 0) > 0) {
+                        showToast(`Synchronisation mit ${r.errors} Fehler(n), ${r.updated ?? 0} aktualisiert. Details im Log.`, 'warning');
                     } else {
                         showToast(`Synchronisation erfolgreich (${r.updated ?? 0} aktualisiert, ${r.skipped ?? 0} unverändert)`, 'success');
                     }

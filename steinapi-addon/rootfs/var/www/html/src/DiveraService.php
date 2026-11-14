@@ -15,15 +15,20 @@ class DiveraService {
     private $config;
     private $logger;
 
-    // FMS Status Mapping - direkt aus dem Original!
-    const FMS_STEIN_MAP = [
-        // Divera FMS -> Stein Status
+    private $lastError = null;
+
+    // Divera FMS -> Stein Status. Nicht umkehrbar: 3 und 4 sind in Stein beide
+    // "inuse". FMS 0, 5, 7, 8 und 9 haben in Stein keine Entsprechung.
+    const FMS_TO_STEIN = [
         1 => 'semiready',
         2 => 'ready',
         3 => 'inuse',
         4 => 'inuse',
-        6 => 'notready',
-        // Stein Status -> Divera FMS
+        6 => 'notready'
+    ];
+
+    // Stein Status -> Divera FMS. "maint" und "notready" werden beide zu 6.
+    const STEIN_TO_FMS = [
         'ready' => 2,
         'semiready' => 1,
         'notready' => 6,
@@ -34,6 +39,33 @@ class DiveraService {
     public function __construct(array $config, Logger $logger) {
         $this->config = $config;
         $this->logger = $logger;
+    }
+
+    /**
+     * Stein-Status zu einem FMS-Status, oder null ohne Entsprechung.
+     */
+    public static function fmsToStein($fms): ?string {
+        if (!is_numeric($fms)) {
+            return null;
+        }
+        return self::FMS_TO_STEIN[(int)$fms] ?? null;
+    }
+
+    /**
+     * FMS-Status zu einem Stein-Status, oder null bei unbekanntem Status.
+     */
+    public static function steinToFms($steinStatus): ?int {
+        if (!is_string($steinStatus)) {
+            return null;
+        }
+        return self::STEIN_TO_FMS[$steinStatus] ?? null;
+    }
+
+    /**
+     * Fehlermeldung des letzten fehlgeschlagenen setVehicleStatus(), sonst null.
+     */
+    public function getLastError(): ?string {
+        return $this->lastError;
     }
 
     /**
@@ -103,30 +135,38 @@ class DiveraService {
     }
 
     /**
-     * Setze Fahrzeugstatus in Divera
-     * Original: setVehicleStatus($vehicleId, $data)
+     * Setze FMS-Status und Notiz eines Fahrzeugs in Divera.
+     *
+     * Die Notiz wird immer mitgeschickt, auch leer: nur so wird eine in Stein
+     * gelöschte Notiz auch in Divera gelöscht. Divera-Notizen sind einzeilig,
+     * Zeilenumbrüche werden zu Leerzeichen.
      */
-    public function setVehicleStatus(string $vehicleId, array $data): bool {
+    public function setVehicleStatus(string $vehicleId, int $fmsStatus, string $note = ''): bool {
+        $this->lastError = null;
         $this->logger->info('Setting vehicle status in Divera', [
             'vehicleId' => $vehicleId,
-            'status' => $data['status'] ?? 'unknown'
+            'fmsStatus' => $fmsStatus
         ]);
 
         // Fahrzeug-IDs sind numerisch - alles andere gehört nicht in den URL-Pfad
         if (!preg_match('/^[A-Za-z0-9_-]{1,64}$/', $vehicleId)) {
+            $this->lastError = 'Invalid Divera vehicle id';
             $this->logger->error('Invalid Divera vehicle id', ['vehicleId' => $vehicleId]);
+            return false;
+        }
+
+        if ($fmsStatus < 0 || $fmsStatus > 9) {
+            $this->lastError = "Invalid FMS status $fmsStatus";
+            $this->logger->error('Invalid FMS status', ['vehicleId' => $vehicleId, 'fmsStatus' => $fmsStatus]);
             return false;
         }
 
         try {
             $payload = [
-                'status' => self::FMS_STEIN_MAP[$data['status'] ?? ''] ?? 6,
-                'status_id' => self::FMS_STEIN_MAP[$data['status'] ?? ''] ?? 6
+                'status' => $fmsStatus,
+                'status_id' => $fmsStatus,
+                'status_note' => trim((string)preg_replace('/\s*\R\s*/', ' ', $note))
             ];
-
-            if (!empty($data['comment'])) {
-                $payload['status_note'] = str_replace("\n", " ", (string)$data['comment']);
-            }
 
             $this->logger->debug('Divera setVehicleStatus payload', $payload);
 
@@ -134,6 +174,7 @@ class DiveraService {
             return true;
 
         } catch (Exception $e) {
+            $this->lastError = $e->getMessage();
             $this->logger->error('Failed to set Divera vehicle status: ' . $e->getMessage());
             return false;
         }
@@ -142,8 +183,9 @@ class DiveraService {
     /**
      * HTTP Request an Divera API
      * Basiert auf Original makeRequest()
+     * (protected, damit tests/sync_simulation.php die Gegenstelle ersetzen kann)
      */
-    private function request(string $method, string $endpoint, ?array $data = null): array {
+    protected function request(string $method, string $endpoint, ?array $data = null): array {
         // Basis-URL + Endpoint
         $url = rtrim($this->config['base_url'], '/') . '/' . ltrim($endpoint, '/');
 
