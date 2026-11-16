@@ -1,9 +1,5 @@
 {
   "configuration": {
-    "port": {
-      "name": "Port",
-      "description": "Internal webserver port for the dashboard"
-    },
     "divera_access_key": {
       "name": "Divera Access Key",
       "description": "The API Access Key from Divera24-7 (found under Management → Interfaces → API Access)"

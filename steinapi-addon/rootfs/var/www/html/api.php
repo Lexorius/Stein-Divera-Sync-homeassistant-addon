@@ -162,8 +162,6 @@ try {
                     'sync_direction' => $config['sync']['direction'],
                     'sync_interval' => $config['sync']['interval_minutes'],
                     'auto_sync' => $config['sync']['auto_enabled'],
-                    'divera_enabled' => $config['divera']['enabled'],
-                    'stein_enabled' => $config['stein']['enabled'],
                     'debug_endpoints' => $debugEnabled
                 ]
             ]);

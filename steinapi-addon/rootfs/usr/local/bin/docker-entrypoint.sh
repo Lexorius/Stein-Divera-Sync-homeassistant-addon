@@ -4,6 +4,8 @@
 #
 # Erzeugt /data/options.json aus Environment-Variablen, damit das original
 # Home-Assistant-Init-Script (steinapi-init.sh) unverändert weiterläuft.
+# Liegt in der gemeinsamen rootfs und ist damit auch im Add-on-Image enthalten,
+# wird dort aber nicht aufgerufen (Start über /etc/services.d/steinapi/run).
 # Danach: supervisord starten (nginx + php-fpm + mariadb + cron).
 ###############################################################################
 set -euo pipefail
@@ -18,7 +20,6 @@ echo "============================================"
 echo "[ENTRYPOINT] Erzeuge $CONFIG_PATH aus ENV-Variablen..."
 
 # Defaults wie im Original-config.yaml
-: "${PORT:=8099}"
 : "${DIVERA_ACCESS_KEY:=}"
 : "${DIVERA_BASE_URL:=https://app.divera247.com/api/v2}"
 : "${STEIN_API_KEY:=}"
@@ -58,7 +59,6 @@ fi
 
 # JSON via jq bauen (sauberer als String-Concat)
 jq -n \
-    --argjson port "$(to_int "$PORT" 8099)" \
     --arg divera_access_key "$DIVERA_ACCESS_KEY" \
     --arg divera_base_url "$DIVERA_BASE_URL" \
     --arg stein_api_key "$STEIN_API_KEY" \
@@ -75,7 +75,6 @@ jq -n \
     --argjson debug_endpoints "$(to_bool "$DEBUG_ENDPOINTS")" \
     --argjson allow_direct_access "$(to_bool "$ALLOW_DIRECT_ACCESS")" \
     '{
-        port: $port,
         divera_access_key: $divera_access_key,
         divera_base_url: $divera_base_url,
         stein_api_key: $stein_api_key,

@@ -76,7 +76,7 @@ class SteinService {
             return $this->assets;
         }
 
-        $this->logger->info('Fetching assets from Stein.app');
+        $this->logger->debug('Fetching assets from Stein.app');
 
         try {
             $buId = $this->config['business_unit_id'];
@@ -84,7 +84,7 @@ class SteinService {
 
             $this->assets = $this->request('GET', $endpoint);
 
-            $this->logger->info('Fetched ' . count($this->assets) . ' assets from Stein.app');
+            $this->logger->debug('Fetched ' . count($this->assets) . ' assets from Stein.app');
 
             // Debug: Zeige alle Assets mit ihren Namen (= Kennzeichen!)
             foreach ($this->assets as $a) {
@@ -173,14 +173,6 @@ class SteinService {
             $this->logger->error("Failed to update asset $assetId: " . $e->getMessage());
             return false;
         }
-    }
-
-    /**
-     * Cache leeren
-     */
-    public function clearCache(): void {
-        $this->assets = [];
-        $this->logger->debug('Asset cache cleared');
     }
 
     /**

@@ -39,10 +39,6 @@ class Database {
         $this->pdo = new PDO($dsn, $config['user'], $config['password'], $options);
     }
 
-    public function getPdo(): PDO {
-        return $this->pdo;
-    }
-
     public function query(string $sql, array $params = []): array {
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
@@ -72,18 +68,6 @@ class Database {
         $this->execute($sql, array_values($data));
 
         return (int)$this->pdo->lastInsertId();
-    }
-
-    public function update(string $table, array $data, string $where, array $whereParams = []): int {
-        $this->assertIdentifier($table);
-        foreach (array_keys($data) as $column) {
-            $this->assertIdentifier((string)$column);
-        }
-
-        $set = implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($data)));
-        $sql = "UPDATE `{$table}` SET {$set} WHERE {$where}";
-
-        return $this->execute($sql, array_merge(array_values($data), $whereParams));
     }
 
     public function fetchOne(string $sql, array $params = []): ?array {

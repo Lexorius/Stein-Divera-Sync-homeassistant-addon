@@ -8,6 +8,17 @@
 //
 // Aufruf:  php tests/sync_simulation.php
 // Exit-Code 0 = alle Erwartungen erfüllt, 1 = mindestens eine nicht.
+//
+// Zwei Betriebsarten:
+//   Standard            Datenbank im Speicher nachgebaut, läuft überall.
+//   STEINAPI_REAL_DB=1  echte Database-Klasse gegen eine laufende MariaDB
+//                       (im CI: im gestarteten Container). Prüft die Abfragen
+//                       für Sync-Stand, Sperre und Verlauf. Schlagen die fehl,
+//                       schreibt der Sync nur eine Warnung und fällt auf die
+//                       alte Zeitstempel-Logik zurück - ohne diesen Test bliebe
+//                       das unbemerkt.
+//                       STEINAPI_SRC    = Pfad zu src/ (Standard: aus dem Repo)
+//                       STEINAPI_CONFIG = Pfad zur erzeugten config.php
 
 if (PHP_SAPI !== 'cli') {
     http_response_code(403);
@@ -24,7 +35,8 @@ set_error_handler(function ($no, $str, $file, $line) {
     return true;
 });
 
-$src = ($argv[1] ?? dirname(__DIR__)) . '/steinapi-addon/rootfs/var/www/html/src';
+$GLOBALS['realDb'] = getenv('STEINAPI_REAL_DB') === '1';
+$src = getenv('STEINAPI_SRC') ?: (($argv[1] ?? dirname(__DIR__)) . '/steinapi-addon/rootfs/var/www/html/src');
 
 // --- Ersatz für Logger und Database (gleiche Klassennamen wie im Add-on) ---
 
@@ -37,31 +49,37 @@ class Logger {
     public function error(string $message, array $context = []): void { $this->errors[] = $message; }
 }
 
-class Database {
-    public array $state = [];
-    public bool $lockFree = true;
-    public bool $stateTableExists = true;
+if ($GLOBALS['realDb']) {
+    // Echte Datenbankschicht des Add-ons, Zugangsdaten aus der erzeugten config.php
+    require "$src/Database.php";
+    $GLOBALS['dbConfig'] = (require (getenv('STEINAPI_CONFIG') ?: '/var/www/html/config/config.php'))['database'];
+} else {
+    class Database {
+        public array $state = [];
+        public bool $lockFree = true;
+        public bool $stateTableExists = true;
 
-    public function query(string $sql, array $params = []): array {
-        if (str_contains($sql, 'RELEASE_LOCK')) { return [['released' => 1]]; }
-        if (str_contains($sql, 'GET_LOCK')) { return [['acquired' => $this->lockFree ? 1 : 0]]; }
-        if (str_contains($sql, 'FROM sync_state')) {
-            if (!$this->stateTableExists) { throw new Exception("Table 'steinapi.sync_state' doesn't exist"); }
-            return array_values($this->state);
+        public function query(string $sql, array $params = []): array {
+            if (str_contains($sql, 'RELEASE_LOCK')) { return [['released' => 1]]; }
+            if (str_contains($sql, 'GET_LOCK')) { return [['acquired' => $this->lockFree ? 1 : 0]]; }
+            if (str_contains($sql, 'FROM sync_state')) {
+                if (!$this->stateTableExists) { throw new Exception("Table 'steinapi.sync_state' doesn't exist"); }
+                return array_values($this->state);
+            }
+            return [];
         }
-        return [];
-    }
-    public function execute(string $sql, array $params = []): int {
-        if (str_contains($sql, 'CREATE TABLE IF NOT EXISTS sync_state')) { $this->stateTableExists = true; return 0; }
-        if (str_contains($sql, 'INSERT INTO sync_state')) {
-            if (!$this->stateTableExists) { throw new Exception("Table 'steinapi.sync_state' doesn't exist"); }
-            $this->state[$params[0]] = ['vehicle_key' => $params[0], 'last_status' => $params[1], 'last_comment' => $params[2]];
-            return 1;
+        public function execute(string $sql, array $params = []): int {
+            if (str_contains($sql, 'CREATE TABLE IF NOT EXISTS sync_state')) { $this->stateTableExists = true; return 0; }
+            if (str_contains($sql, 'INSERT INTO sync_state')) {
+                if (!$this->stateTableExists) { throw new Exception("Table 'steinapi.sync_state' doesn't exist"); }
+                $this->state[$params[0]] = ['vehicle_key' => $params[0], 'last_status' => $params[1], 'last_comment' => $params[2]];
+                return 1;
+            }
+            return 0;
         }
-        return 0;
+        public function insert(string $table, array $data): int { return 1; }
+        public function fetchOne(string $sql, array $params = []): ?array { $r = $this->query($sql, $params); return $r[0] ?? null; }
     }
-    public function insert(string $table, array $data): int { return 1; }
-    public function fetchOne(string $sql, array $params = []): ?array { $r = $this->query($sql, $params); return $r[0] ?? null; }
 }
 
 require "$src/DiveraService.php";
@@ -134,15 +152,60 @@ class Sim {
     public World $w;
     public Database $db;
     public Logger $log;
+    private $lockHolder = null;   // zweite DB-Verbindung, die im Echtbetrieb die Sperre hält
 
     public function __construct(string $title, array $divera, array $stein) {
         echo "\n=== $title\n";
         $this->w = new World();
         $this->w->divera = $divera + ['id' => 11, 'name' => 'GKW 1', 'number' => 'THW-12345'];
         $this->w->stein = $stein + ['id' => 22, 'name' => 'THW-12345', 'groupId' => 1, 'label' => 'GKW 1'];
-        $this->db = new Database();
+        $this->db = self::newDb();
+        if ($GLOBALS['realDb']) {
+            // Jeder Fall beginnt ohne gespeicherten Stand
+            try { $this->db->execute('DELETE FROM sync_state'); } catch (Exception $e) { /* Tabelle fehlt: legt der Sync an */ }
+        }
         $this->log = new Logger();
         echo "  Start  : " . $this->state() . "\n";
+    }
+
+    private static function newDb(): Database {
+        return $GLOBALS['realDb'] ? new Database($GLOBALS['dbConfig']) : new Database();
+    }
+
+    /** Simuliert einen zweiten, noch laufenden Sync. */
+    public function holdLock(): void {
+        if ($GLOBALS['realDb']) {
+            // Name der Sperre wie SyncService::LOCK_NAME. Die Verbindung bleibt
+            // bis zum Ende des Falls offen und gibt die Sperre dann frei.
+            $this->lockHolder = self::newDb();
+            $this->lockHolder->query("SELECT GET_LOCK('steinapi_sync', 0) AS acquired");
+        } else {
+            $this->db->lockFree = false;
+        }
+    }
+
+    /** Zustand vor dem Update von 2.1.0: die Tabelle gibt es noch nicht. */
+    public function dropStateTable(): void {
+        if ($GLOBALS['realDb']) {
+            $this->db->execute('DROP TABLE IF EXISTS sync_state');
+        } else {
+            $this->db->stateTableExists = false;
+        }
+    }
+
+    public function stateTableExists(): bool {
+        if ($GLOBALS['realDb']) {
+            return count($this->db->query("SHOW TABLES LIKE 'sync_state'")) === 1;
+        }
+        return $this->db->stateTableExists;
+    }
+
+    /** Gespeicherter Stand eines Fahrzeugs oder null. */
+    public function savedState(string $key): ?array {
+        if ($GLOBALS['realDb']) {
+            return $this->db->fetchOne('SELECT last_status, last_comment FROM sync_state WHERE vehicle_key = ?', [$key]);
+        }
+        return $this->db->state[$key] ?? null;
     }
     public function state(): string {
         return sprintf("Divera %s / %s | Stein %s / %s", j($this->w->divera['fmsstatus']), j($this->w->divera['fmsstatus_note']),
@@ -202,6 +265,8 @@ $x = new Sim('3) Kommentar in Stein gelöscht',
 $x->run(); $x->steinEdit(['comment' => '']); $x->run(); $x->run();
 $x->expect('leere Notiz wird gesendet, Divera und Stein leer',
     $x->w->divera['fmsstatus_note'] === '' && $x->w->stein['comment'] === '' && array_key_exists('status_note', $x->w->lastDiveraPayload ?? []));
+$s = $x->savedState('THW-12345');
+$x->expect('gespeicherter Stand: leere Notiz als leerer Text, nicht als "kein Stand"', $s !== null && $s['last_comment'] === '' && $s['last_status'] === 'ready');
 
 $x = new Sim('4) Stein "maint", neue Notiz in Divera',
     ['fmsstatus' => 6, 'fmsstatus_note' => 'Werkstatt', 'fmsstatus_ts' => $t - 600],
@@ -237,6 +302,8 @@ $x->run(); $x->steinEdit(['comment' => 'Neuer Hinweis aus Stein']); $x->diveraEd
 $x->expect('beide Änderungen bleiben erhalten (Notiz -> Divera, Status -> Stein)',
     $x->w->divera['fmsstatus_note'] === 'Neuer Hinweis aus Stein' && $x->w->stein['comment'] === 'Neuer Hinweis aus Stein'
     && $x->w->stein['status'] === 'inuse' && $x->w->divera['fmsstatus'] === 3 && ($r['details'][0]['action'] ?? '') === 'both');
+$s = $x->savedState('THW-12345');
+$x->expect('gespeicherter Stand entspricht dem Ergebnis', $s !== null && $s['last_status'] === 'inuse' && $s['last_comment'] === 'Neuer Hinweis aus Stein');
 
 $x = new Sim('8) Echter Konflikt: Notiz auf beiden Seiten geändert, Divera zuletzt',
     ['fmsstatus' => 2, 'fmsstatus_note' => 'alt', 'fmsstatus_ts' => $t - 600],
@@ -264,7 +331,7 @@ $x->expect('nachgeholt in Richtung Stein -> Divera', $x->w->divera['fmsstatus_no
 $x = new Sim('11) Sperre belegt (paralleler Lauf)',
     ['fmsstatus' => 2, 'fmsstatus_note' => 'a', 'fmsstatus_ts' => $t],
     ['status' => 'ready', 'comment' => 'b', 'lastModified' => iso($t - 600)]);
-$x->db->lockFree = false;
+$x->holdLock();
 $r = $x->run();
 $x->expect('busy=true, kein Schreibzugriff', $r['busy'] === true && $x->w->diveraWrites === 0 && $x->w->steinWrites === 0);
 
@@ -279,11 +346,11 @@ $x->expect('Stein auf "ready"', $x->w->stein['status'] === 'ready');
 $x = new Sim('13) Update von 2.1.0: Tabelle sync_state fehlt noch',
     ['fmsstatus' => 2, 'fmsstatus_note' => 'aus Divera', 'fmsstatus_ts' => $t - 600],
     ['status' => 'ready', 'comment' => 'aus Stein', 'lastModified' => iso($t)]);
-$x->db->stateTableExists = false;
+$x->dropStateTable();
 $x->run(); $x->run();
 $x->expect('Tabelle wird angelegt, erster Lauf entscheidet per Zeitstempel (Stein jünger), danach Ruhe',
-    $x->db->stateTableExists && $x->w->divera['fmsstatus_note'] === 'aus Stein' && $x->w->diveraWrites === 1 && $x->w->steinWrites === 0
-    && isset($x->db->state['THW-12345']));
+    $x->stateTableExists() && $x->w->divera['fmsstatus_note'] === 'aus Stein' && $x->w->diveraWrites === 1 && $x->w->steinWrites === 0
+    && $x->savedState('THW-12345') !== null);
 
 $x = new Sim('14) Richtung "divera_to_stein" erzwingt Divera -> Stein',
     ['fmsstatus' => 3, 'fmsstatus_note' => 'D', 'fmsstatus_ts' => $t - 600],
@@ -303,5 +370,6 @@ $x = new Sim('16) Stein-PATCH enthält das vollständige Asset (andere Felder bl
 $x->run();
 $x->expect('radioName und category unverändert', ($x->w->stein['radioName'] ?? null) === 'Heros 1/51' && ($x->w->stein['category'] ?? null) === 'GKW' && $x->w->stein['comment'] === 'neu');
 
-echo "\n=== Ergebnis: " . ($GLOBALS['fail'] === 0 ? 'alle Erwartungen erfüllt' : $GLOBALS['fail'] . ' Erwartung(en) NICHT erfüllt') . ", PHP-Warnungen: {$GLOBALS['warnings']}\n";
+echo "\n=== Datenbank: " . ($GLOBALS['realDb'] ? 'echte MariaDB' : 'im Speicher nachgebaut') . "\n";
+echo "=== Ergebnis: " . ($GLOBALS['fail'] === 0 ? 'alle Erwartungen erfüllt' : $GLOBALS['fail'] . ' Erwartung(en) NICHT erfüllt') . ", PHP-Warnungen: {$GLOBALS['warnings']}\n";
 exit($GLOBALS['fail'] === 0 && $GLOBALS['warnings'] === 0 ? 0 : 1);

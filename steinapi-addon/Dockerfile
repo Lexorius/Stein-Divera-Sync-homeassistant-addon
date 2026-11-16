@@ -1,5 +1,19 @@
-ARG BUILD_FROM
-FROM $BUILD_FROM
+###############################################################################
+# SteinAPI - Divera Sync: EIN Dockerfile für beide Varianten.
+#
+#   Home Assistant Add-on  -> letzte Stufe "addon" (Standardziel).
+#                             Der Supervisor baut ohne --target und setzt
+#                             BUILD_FROM aus build.yaml.
+#   Standalone-Container   -> Stufe "standalone":
+#                             docker build --target standalone -t steinapi steinapi-addon
+#                             (oder: cd steinapi-docker && docker compose up -d --build)
+#
+# Beide Stufen bauen auf "base" auf: gleiche Pakete, gleiche rootfs/, gleiche
+# Rechte. Bis 2.2.3 gab es dafür zwei getrennte Dockerfiles, die von Hand
+# gleich gehalten werden mussten.
+###############################################################################
+ARG BUILD_FROM=alpine:3.24
+FROM ${BUILD_FROM} AS base
 
 # Mindestversion von PHP, die die Fixes für CVE-2026-109618 und CVE-2026-109619
 # (Remote Code Execution, php.net Security Advisory vom 21.10.2026) enthält.
@@ -32,39 +46,57 @@ RUN apk add --no-cache \
 
 # Erstelle Verzeichnisse
 RUN mkdir -p /var/www/html \
-    && mkdir -p /var/log/nginx \
-    && mkdir -p /var/log/php \
     && mkdir -p /var/log/steinapi \
-    && mkdir -p /var/log/supervisord \
     && mkdir -p /run/nginx \
     && mkdir -p /run/mysqld \
     && mkdir -p /var/lib/mysql \
     && mkdir -p /data/steinapi \
     && mkdir -p /data/mysql
 
-# Kopiere Anwendungsdateien (inkl. php.ini-Härtung und php-fpm Pool-Konfiguration)
+# Kopiere Anwendungsdateien (PHP-App, nginx, php-fpm, supervisord, Start-Skripte)
 COPY rootfs /
 
 # Setze Berechtigungen
 # Webroot gehört root und ist für nginx/php-fpm nur lesbar (kein Schreibzugriff
-# durch den Webserver-Prozess). Logs sind für den nginx-User beschreibbar.
+# durch den Webserver-Prozess).
 RUN chmod +x /etc/services.d/steinapi/run \
     && chmod +x /etc/services.d/steinapi/finish \
     && chmod +x /usr/local/bin/steinapi-init.sh \
     && chmod +x /usr/local/bin/steinapi-cron.sh \
     && chmod +x /usr/local/bin/steinapi-mariadb.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh \
     && chown -R root:nginx /var/www/html \
     && find /var/www/html -type d -exec chmod 750 {} \; \
     && find /var/www/html -type f -exec chmod 640 {} \; \
-    && chown nginx:nginx /var/log/php /var/log/steinapi \
+    && chown nginx:nginx /var/log/steinapi \
     && chown -R mysql:mysql /var/lib/mysql \
     && chown -R mysql:mysql /run/mysqld \
     && php-fpm -t
 
-# Exponiere Port
+ARG BUILD_VERSION=dev
+RUN echo "${BUILD_VERSION}" > /etc/steinapi-version
+
 EXPOSE 8099
 
-# Build arguments
+###############################################################################
+# Standalone-Container: Konfiguration über Umgebungsvariablen, eigener
+# Entrypoint (erzeugt /data/options.json) und Healthcheck statt HA-Watchdog.
+###############################################################################
+FROM base AS standalone
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:8099/api.php?action=health" || exit 1
+
+VOLUME ["/data"]
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
+###############################################################################
+# Home Assistant Add-on. Muss die LETZTE Stufe bleiben: der Supervisor baut
+# das Standardziel. Start über s6 des Basis-Images (/etc/services.d/steinapi).
+###############################################################################
+FROM base AS addon
+
 ARG BUILD_ARCH
 ARG BUILD_DATE
 ARG BUILD_DESCRIPTION
@@ -73,9 +105,6 @@ ARG BUILD_REF
 ARG BUILD_REPOSITORY
 ARG BUILD_VERSION
 
-RUN echo "${BUILD_VERSION:-dev}" > /etc/steinapi-version
-
-# Labels
 LABEL \
     io.hass.name="${BUILD_NAME}" \
     io.hass.description="${BUILD_DESCRIPTION}" \

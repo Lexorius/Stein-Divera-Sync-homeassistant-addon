@@ -1,6 +1,6 @@
 # SteinAPI Home Assistant Add-on
 
-![Version](https://img.shields.io/badge/version-2.2.3-blue)
+![Version](https://img.shields.io/badge/version-2.2.4-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![PHP](https://img.shields.io/badge/PHP-8.4.27-777bb4)
@@ -115,8 +115,8 @@ Assistant nicht mehr mit Basis-Images versorgt und seit 2.1.0 nicht mehr unterst
 | Option | Beschreibung | Standard |
 |--------|--------------|----------|
 | `timezone` | Zeitzone des Containers (z.B. `Europe/Berlin`) | `Europe/Berlin` |
-| `log_level` | Log-Detail (`debug`, `info`, `warning`, `error`) | `info` |
-| `max_log_entries` | Max. Anzahl Log-Einträge in der Datenbank | `1000` |
+| `log_level` | Log-Detail (`debug`, `info`, `warning`, `error`). Auf `info` schreibt ein Lauf ohne Änderung zwei Zeilen, auf `debug` über hundert | `info` |
+| `max_log_entries` | Max. Anzahl Log-Einträge in der Datenbank. 1000 reichen auf `info` für knapp zwei Tage | `1000` |
 | `rate_limit_requests` | HTTP-Anfragen an `/api.php` pro Zeitfenster und Client-IP | `100` |
 | `rate_limit_window_seconds` | Zeitfenster für das HTTP-Rate-Limit | `60` |
 | `debug_endpoints` | Debug-Endpunkte freischalten (siehe unten) | `false` |
@@ -125,7 +125,6 @@ Assistant nicht mehr mit Basis-Images versorgt und seit 2.1.0 nicht mehr unterst
 ### Beispielkonfiguration
 
 ```yaml
-port: 8099
 divera_access_key: "your-divera-access-key-here"
 divera_base_url: "https://app.divera247.com/api/v2"
 stein_api_key: "your-stein-api-key-here"
@@ -220,6 +219,13 @@ Systemtabellen automatisch migriert.
   die Divera-API vorgegeben.
 
 ## 🐛 Fehlerbehebung
+
+### Wo stehen welche Meldungen?
+- **Aktivitätsprotokoll im Dashboard:** was der Sync getan hat, also Läufe, Schreibzugriffe und
+  Fehler beim Abgleich.
+- **Protokoll des Add-ons** (**Einstellungen → Add-ons → SteinAPI → Protokoll**): Start des
+  Add-ons, eine Zeile je automatischem Lauf sowie Fehler von Webserver und PHP, zum Beispiel
+  abgelehnte Zugriffe. Hier nachsehen, wenn das Dashboard selbst nicht lädt oder „API-Fehler" meldet.
 
 ### Add-on startet nicht
 1. Add-on-Logs prüfen: **Einstellungen → Add-ons → SteinAPI → Protokoll**

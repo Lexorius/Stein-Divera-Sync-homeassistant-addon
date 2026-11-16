@@ -98,7 +98,9 @@ class DiveraService {
      * - Rückgabe ist direkt $response['data']
      */
     public function getVehicleStatus(): array {
-        $this->logger->info('Fetching vehicle status from Divera (pull/vehicle-status)');
+        // Routine-Meldungen eines Laufs stehen auf debug: bei 288 Läufen am Tag
+        // verdrängen sie sonst Fehler und Schreibzugriffe aus dem Protokoll.
+        $this->logger->debug('Fetching vehicle status from Divera (pull/vehicle-status)');
 
         try {
             $response = $this->request('GET', 'pull/vehicle-status');
@@ -107,7 +109,7 @@ class DiveraService {
                 $vehicles = [];
             }
 
-            $this->logger->info('Fetched ' . count($vehicles) . ' vehicles from Divera');
+            $this->logger->debug('Fetched ' . count($vehicles) . ' vehicles from Divera');
 
             // Debug: Zeige alle Fahrzeuge mit ihren Kennzeichen
             foreach ($vehicles as $v) {

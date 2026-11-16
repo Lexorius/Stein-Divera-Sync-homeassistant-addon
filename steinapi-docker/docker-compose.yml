@@ -1,9 +1,11 @@
 services:
   steinapi:
     build:
-      # Build-Context = Repo-Root (eine Ebene hoch), damit wir steinapi-addon/rootfs/ teilen können
-      context: ..
-      dockerfile: steinapi-docker/Dockerfile
+      # Dasselbe Dockerfile wie das Home-Assistant-Add-on, Stufe "standalone".
+      context: ../steinapi-addon
+      target: standalone
+      args:
+        BUILD_VERSION: standalone
     image: steinapi-divera-sync:local
     container_name: steinapi
     restart: unless-stopped

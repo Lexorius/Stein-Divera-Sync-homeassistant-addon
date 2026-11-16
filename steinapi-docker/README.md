@@ -20,19 +20,17 @@ Varianten gleichzeitig aus.
 Stein-Divera-Sync-homeassistant-addon/
 ├── repository.json              ← HA-Supervisor-Metadaten
 ├── README.md
-├── .dockerignore                ← (optional) schlanker Build-Context
-├── steinapi-addon/              ← HA-Addon (Original, unverändert)
+├── steinapi-addon/              ← HA-Addon
 │   ├── config.yaml
 │   ├── build.yaml
-│   ├── Dockerfile               ← NUR für HA-Supervisor-Build
+│   ├── Dockerfile               ← EIN Dockerfile für beide Varianten
+│   │                              (Stufen "standalone" und "addon")
 │   └── rootfs/                  ← PHP-App + Services (SHARED)
 │       ├── etc/...
-│       ├── usr/...
+│       ├── usr/local/bin/docker-entrypoint.sh   ← Start des Standalone-Containers
 │       └── var/www/html/...
 └── steinapi-docker/             ← DIESER Ordner (Standalone Docker)
-    ├── Dockerfile               ← referenziert ../steinapi-addon/rootfs/
-    ├── docker-compose.yml
-    ├── docker-entrypoint.sh
+    ├── docker-compose.yml       ← baut ../steinapi-addon mit Stufe "standalone"
     ├── .env.example
     └── README.md
 ```
@@ -84,9 +82,9 @@ entsprechen 1:1 den Optionen des HA-Addons.
 docker compose up -d --build
 ```
 
-Docker Compose nutzt automatisch **Build-Context `..`** (Repo-Root), damit
-das Dockerfile auf `steinapi-addon/rootfs/` zugreifen kann. Der erste
-Build dauert 2–5 Minuten.
+Docker Compose baut das Dockerfile des Add-ons (`../steinapi-addon`) mit der
+Stufe `standalone`. Add-on und Container entstehen damit aus derselben Datei.
+Der erste Build dauert 2–5 Minuten.
 
 ```powershell
 # Logs live mitlesen
@@ -136,13 +134,14 @@ Sync-Logs.
 
 ## Manueller Build (ohne Compose)
 
-Falls du pur mit `docker build` arbeiten willst — Kommando muss aus dem
-**Repo-Root** laufen, nicht aus `steinapi-docker/`:
+Falls du pur mit `docker build` arbeiten willst: Build-Context ist der Ordner
+`steinapi-addon`, das Ziel die Stufe `standalone`. Ohne `--target` entsteht
+das Image für Home Assistant, das ohne dessen Basis-Image nicht startet.
 
 ```powershell
 cd <Repo-Root>
-docker build -f steinapi-docker/Dockerfile -t steinapi-divera-sync:local .
-docker run -d --name steinapi -p 8099:8099 `
+docker build --target standalone -t steinapi-divera-sync:local steinapi-addon
+docker run -d --name steinapi -p 127.0.0.1:8099:8099 `
     -v steinapi-data:/data `
     --env-file steinapi-docker/.env `
     steinapi-divera-sync:local
@@ -247,9 +246,14 @@ Typische Ursachen: leere API-Keys, Schreibrechte auf Volume, Port-Konflikt.
 
 ### „COPY failed: file not found“ beim Build
 
-Passiert, wenn man `docker build` aus dem falschen Verzeichnis startet
-oder `context: ..` in `docker-compose.yml` manuell geändert hat. Der
-Build-Context muss der **Repo-Root** sein, nicht `steinapi-docker/`.
+Passiert, wenn man `docker build` mit dem falschen Build-Context startet
+oder `context: ../steinapi-addon` in `docker-compose.yml` geändert hat. Der
+Build-Context muss der Ordner **`steinapi-addon`** sein.
+
+### Container startet nicht, „exec /init: no such file“ oder sofortiges Ende
+
+Das Image wurde ohne `--target standalone` gebaut. Das ist die Variante für
+Home Assistant. Mit `--target standalone` neu bauen oder Compose verwenden.
 
 ### Container läuft, Webseite lädt aber nicht
 

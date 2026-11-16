@@ -68,7 +68,6 @@ if [ ! -r "$CONFIG_PATH" ]; then
     exit 1
 fi
 
-PORT=$(int_or "$(jq -r '.port // 8099' "$CONFIG_PATH")" 8099)
 DIVERA_ACCESS_KEY=$(jq -r '.divera_access_key // ""' "$CONFIG_PATH")
 DIVERA_BASE_URL=$(jq -r '.divera_base_url // "https://app.divera247.com/api/v2"' "$CONFIG_PATH")
 STEIN_API_KEY=$(jq -r '.stein_api_key // ""' "$CONFIG_PATH")
@@ -97,7 +96,6 @@ for var in DIVERA_BASE_URL STEIN_BASE_URL; do
     fi
 done
 
-echo "[INFO] Port: $PORT"
 echo "[INFO] Sync Interval: $SYNC_INTERVAL Minuten"
 echo "[INFO] Sync Direction: $SYNC_DIRECTION"
 echo "[INFO] Auto Sync: $AUTO_SYNC"
@@ -288,16 +286,14 @@ return [
     // Divera Konfiguration
     'divera' => [
         'access_key' => '$(php_str "$DIVERA_ACCESS_KEY")',
-        'base_url' => '$(php_str "$DIVERA_BASE_URL")',
-        'enabled' => true
+        'base_url' => '$(php_str "$DIVERA_BASE_URL")'
     ],
 
     // Stein.app Konfiguration
     'stein' => [
         'api_key' => '$(php_str "$STEIN_API_KEY")',
         'business_unit_id' => '$(php_str "$STEIN_BUSINESS_UNIT_ID")',
-        'base_url' => '$(php_str "$STEIN_BASE_URL")',
-        'enabled' => true
+        'base_url' => '$(php_str "$STEIN_BASE_URL")'
     ],
 
     // Sync Einstellungen
@@ -316,23 +312,11 @@ return [
         'path' => '/var/log/steinapi'
     ],
 
-    // Rate Limiting (wird von nginx durchgesetzt, siehe steinapi-ratelimit.conf)
-    'rate_limit' => [
-        'requests' => $RATE_LIMIT_REQUESTS,
-        'window_seconds' => $RATE_LIMIT_WINDOW
-    ],
-
     // Debug-Endpunkte (debug, compareData, rawDivera, rawStein, testSteinRaw)
     'debug_endpoints' => $DEBUG_ENDPOINTS,
 
     // Zeitzone
-    'timezone' => '$(php_str "$TIMEZONE")',
-
-    // Home Assistant Integration
-    'homeassistant' => [
-        'ingress' => true,
-        'addon_slug' => 'steinapi'
-    ]
+    'timezone' => '$(php_str "$TIMEZONE")'
 ];
 PHPCONFIG
 )

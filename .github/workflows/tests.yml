@@ -19,7 +19,7 @@ jobs:
 
       - name: Shell-Syntax
         run: |
-          for f in steinapi-addon/rootfs/usr/local/bin/*.sh steinapi-docker/docker-entrypoint.sh; do
+          for f in steinapi-addon/rootfs/usr/local/bin/*.sh steinapi-addon/rootfs/etc/services.d/steinapi/*; do
             bash -n "$f"
           done
 
@@ -29,17 +29,17 @@ jobs:
       - name: Sync-Simulation
         run: php tests/sync_simulation.php
 
-  container:
-    name: Image bauen und starten
+  # Standalone-Container: Stufe "standalone" des gemeinsamen Dockerfiles.
+  standalone:
+    name: Standalone-Image bauen und starten
     runs-on: ubuntu-latest
     env:
       API: http://127.0.0.1:8099/api.php
     steps:
       - uses: actions/checkout@v4
 
-      # Das Standalone-Image nutzt dieselbe rootfs/ wie das Home-Assistant-Add-on.
       - name: Image bauen
-        run: docker build -f steinapi-docker/Dockerfile -t steinapi-test .
+        run: docker build --target standalone --build-arg BUILD_VERSION=ci -t steinapi-test steinapi-addon
 
       # Die API-URLs zeigen auf einen geschlossenen lokalen Port: der Test
       # spricht nie mit den echten Diensten von Divera oder Stein.app.
@@ -85,8 +85,30 @@ jobs:
           curl -fsS -X POST -H 'Content-Type: application/json' -d '{"source":"ci"}' "$API?action=sync" | tee sync.json
           jq -e '.success == true and .data.busy == false and .data.success == false and .data.errors == 1' sync.json
           curl -fsS "$API?action=stats" | tee stats.json
-          jq -e '.success == true and .data.last_sync != null and .data.synced_today == 0' stats.json
-          curl -fsS "$API?action=logs&limit=50" | jq -e '[.data.logs[].message] | any(startswith("Sync failed"))'
+          # Genau EIN Fehler für einen fehlgeschlagenen Lauf, kein automatischer
+          # Lauf bisher, also noch keine Angabe zum nächsten.
+          jq -e '.success == true and .data.last_sync != null and .data.synced_today == 0 and .data.errors_24h == 1 and .data.next_sync == null' stats.json
+          curl -fsS "$API?action=logs&limit=50" | tee logs.json | jq -e '[.data.logs[].message] | any(startswith("Sync failed"))'
+          # Routine-Meldungen stehen auf debug und fehlen bei log_level info
+          jq -e '[.data.logs[].message] | any(startswith("Fetching") or . == "Indexed assets" or . == "Fetched data") | not' logs.json
+
+      # Die Sync-Regeln noch einmal, diesmal mit der echten Database-Klasse gegen
+      # die MariaDB im Container: Sync-Stand lesen und schreiben, Tabelle
+      # anlegen, Sperre halten.
+      - name: Sync-Simulation gegen die echte Datenbank
+        run: |
+          docker cp tests steinapi:/tmp/tests
+          docker exec \
+            -e STEINAPI_REAL_DB=1 \
+            -e STEINAPI_SRC=/var/www/html/src \
+            -e STEINAPI_CONFIG=/var/www/html/config/config.php \
+            steinapi php /tmp/tests/sync_simulation.php
+
+      - name: Meldungen erscheinen in der Container-Ausgabe
+        run: |
+          docker logs steinapi > container.log 2>&1
+          grep -F '[CRON] SteinAPI Cron Service gestartet' container.log
+          grep -E 'ready to handle connections' container.log
 
       - name: Zugriffsbeschränkung (allow_direct_access=false)
         run: |
@@ -108,7 +130,72 @@ jobs:
           code() { curl -s -o /dev/null -w '%{http_code}' "$1"; }
           test "$(code "$API?action=health")" = 403
           test "$(code "http://127.0.0.1:8099/")" = 403
+          # die Ablehnung steht in der Container-Ausgabe
+          sleep 1
+          docker logs steinapi 2>&1 | grep -F 'access forbidden by rule'
 
       - name: Container-Protokoll
         if: always()
         run: docker logs steinapi 2>&1 | tail -n 80
+
+  # Das Image, das Home Assistant baut: Standardziel des Dockerfiles auf dem
+  # Basis-Image des Supervisors, gestartet wie im Add-on über s6 und mit einer
+  # options.json unter /data.
+  addon:
+    name: Add-on-Image bauen und starten
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Basis-Image aus build.yaml lesen
+        run: |
+          BASE=$(sed -n 's/^ *amd64: *//p' steinapi-addon/build.yaml)
+          test -n "$BASE"
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+          echo "Basis-Image: $BASE"
+
+      - name: Image bauen
+        run: |
+          docker build \
+            --build-arg BUILD_FROM="$BASE" \
+            --build-arg BUILD_ARCH=amd64 \
+            --build-arg BUILD_VERSION=ci \
+            -t steinapi-addon-test steinapi-addon
+
+      - name: Add-on starten
+        run: |
+          mkdir -p ci-data
+          echo '{"divera_base_url":"https://127.0.0.1:9","stein_base_url":"https://127.0.0.1:9"}' > ci-data/options.json
+          docker run -d --name addon -p 127.0.0.1:8099:8099 -v "$PWD/ci-data:/data" steinapi-addon-test
+          for i in $(seq 1 60); do
+            if docker exec addon curl -fsS "http://127.0.0.1:8099/api.php?action=health" >/dev/null 2>&1; then
+              echo "bereit nach $((i * 2)) Sekunden"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Add-on wurde nicht bereit"
+          docker logs addon 2>&1 | tail -n 80
+          exit 1
+
+      - name: Konfiguration und Zugriff
+        run: |
+          docker exec addon nginx -t
+          docker exec addon php-fpm -t
+          docker exec addon cat /etc/steinapi-version
+          docker exec addon curl -fsS "http://127.0.0.1:8099/api.php?action=stats"
+          # Standard im Add-on: nur Ingress und localhost. Von außen 403.
+          test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8099/api.php?action=health")" = 403
+
+      - name: Meldungen erscheinen in der Container-Ausgabe
+        run: |
+          sleep 1
+          docker logs addon > addon.log 2>&1
+          grep -F 'Zugriff: nur Home Assistant Ingress' addon.log
+          grep -F '[CRON] SteinAPI Cron Service gestartet' addon.log
+          grep -E 'ready to handle connections' addon.log
+          grep -F 'access forbidden by rule' addon.log
+
+      - name: Container-Protokoll
+        if: always()
+        run: docker logs addon 2>&1 | tail -n 80

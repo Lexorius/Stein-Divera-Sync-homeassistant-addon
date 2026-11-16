@@ -5,6 +5,44 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.4] - 2026-11-17
+
+Protokoll und Dashboard-Anzeigen korrigiert. Am Verhalten der Synchronisation ändert sich nichts.
+
+### Behoben
+- **Fehler verschwanden nach rund zehn Stunden aus dem Protokoll**: Jeder Lauf schrieb acht
+  Routinezeilen auf Stufe `info`, rund 2300 am Tag bei 1000 gespeicherten Einträgen. Sechs davon
+  stehen jetzt auf `debug`. Auf `info` bleiben Start und Ergebnis eines Laufs sowie alle
+  Schreibzugriffe und Fehler. 1000 Einträge reichen damit für knapp zwei Tage.
+- **Kachel „Fehler" zählte Logzeilen statt Fehler**: Ein fehlgeschlagener Lauf erschien als 2,
+  und Fehler, die älter als das Protokoll waren, fehlten ganz. Die Zahl kommt jetzt aus dem
+  Verlauf: jedes fehlgeschlagene Fahrzeug und jeder abgebrochene Lauf zählt einmal.
+- **„Nächste Auto-Sync" stimmte nach einem manuellen Lauf nicht**: Die Anzeige rechnete vom
+  letzten Lauf jeder Art. Der automatische Takt läuft unabhängig davon, deshalb zählt jetzt nur
+  der letzte automatische Lauf.
+- **Meldungen von Webserver, PHP und Cron stehen im Protokoll des Add-ons**: Bisher landeten sie
+  in Dateien im Container, die in Home Assistant niemand sieht und die beim Neustart verloren
+  gehen. Der automatische Lauf schreibt dort eine kurze Zeile je Lauf.
+- Der automatische Lauf erkennt HTTP-Fehler des eigenen Aufrufs und bricht nach 330 Sekunden ab.
+
+### Geändert
+- **Ein Dockerfile für Add-on und Standalone-Container** (Stufen `addon` und `standalone`). Bisher
+  gab es zwei Dateien mit gleichem Inhalt, getestet wurde nur eine. `docker-compose.yml` baut
+  jetzt `../steinapi-addon` mit `target: standalone`. Wer von Hand baut:
+  `docker build --target standalone -t steinapi steinapi-addon`.
+- **Automatische Tests** bauen zusätzlich das Add-on-Image auf dem Basis-Image von Home Assistant
+  und starten es. Die Sync-Simulation läuft ein zweites Mal gegen die echte MariaDB und prüft die
+  Abfragen für Sync-Stand, Sperre und Verlauf.
+- Kein Zugriffsprotokoll des Webservers mehr. Abgelehnte Zugriffe stehen weiterhin im Protokoll
+  des Add-ons.
+
+### Entfernt
+- **Option `port`**: Sie hatte keine Wirkung, der Webserver lauscht fest auf 8099. Ein noch
+  gespeicherter Wert wird ignoriert. Im Standalone-Container entfällt entsprechend `PORT`.
+- Ungenutzter Code: drei Methoden der Datenbank- und Stein-Schicht, eine Hilfsfunktion im
+  Dashboard, drei nie gelesene Blöcke der erzeugten Konfiguration und die Felder
+  `divera_enabled` und `stein_enabled` der API-Aktion `config`.
+
 ## [2.2.3] - 2026-11-17
 
 Aufräumen nach dem Code-Audit. Am Verhalten der Synchronisation ändert sich nichts.

@@ -211,7 +211,7 @@ class SyncService {
             $steinData = $this->stein->getAssets();
             $state = $this->loadState();
 
-            $this->logger->info('Fetched data', [
+            $this->logger->debug('Fetched data', [
                 'divera_count' => count($diveraData),
                 'stein_count' => count($steinData)
             ]);
@@ -237,7 +237,7 @@ class SyncService {
                 }
             }
 
-            $this->logger->info('Indexed assets', [
+            $this->logger->debug('Indexed assets', [
                 'divera_indexed' => count($diveraAssets),
                 'stein_indexed' => count($steinAssets),
                 'divera_keys' => array_keys($diveraAssets),
@@ -552,11 +552,18 @@ class SyncService {
 
             if ($lastSync) {
                 $stats['last_sync'] = $lastSync['created_at'];
+            }
 
-                if ($stats['auto_sync_enabled']) {
+            // Nächster automatischer Lauf: Der Cron läuft im festen Takt,
+            // unabhängig von manuellen Läufen. Deshalb zählt hier nur der
+            // letzte Lauf mit source = 'cron', nicht der letzte Lauf überhaupt.
+            if ($stats['auto_sync_enabled']) {
+                $lastCron = $this->db->fetchOne(
+                    "SELECT created_at FROM sync_history WHERE source = 'cron' ORDER BY created_at DESC LIMIT 1"
+                );
+                if ($lastCron) {
                     $interval = ($this->config['interval_minutes'] ?? 5) * 60;
-                    $lastSyncTime = strtotime($lastSync['created_at']);
-                    $stats['next_sync'] = date('c', $lastSyncTime + $interval);
+                    $stats['next_sync'] = date('c', strtotime($lastCron['created_at']) + $interval);
                 }
             }
 
@@ -566,9 +573,12 @@ class SyncService {
             );
             $stats['synced_today'] = (int)($today['total'] ?? 0);
 
-            // Fehler in 24h
+            // Fehler in 24h: aus dem Verlauf, nicht aus dem Protokoll. Das
+            // Protokoll ist auf max_log_entries begrenzt und schreibt je Fehler
+            // mehrere Zeilen. error_count zählt jedes fehlgeschlagene Fahrzeug
+            // und jeden abgebrochenen Lauf genau einmal.
             $errors = $this->db->fetchOne(
-                "SELECT COUNT(*) as count FROM sync_logs WHERE level = 'error' AND timestamp > DATE_SUB(NOW(), INTERVAL 24 HOUR)"
+                "SELECT COALESCE(SUM(error_count), 0) as count FROM sync_history WHERE created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)"
             );
             $stats['errors_24h'] = (int)($errors['count'] ?? 0);
 

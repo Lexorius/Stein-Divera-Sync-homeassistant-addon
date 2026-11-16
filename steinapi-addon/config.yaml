@@ -1,7 +1,7 @@
 ---
 name: "SteinAPI - Divera Sync"
 description: "API + Dashboard für die Synchronisation des Fahrzeugstatus zwischen Divera24-7 und Stein.app"
-version: "2.2.3"
+version: "2.2.4"
 slug: "steinapi"
 url: "https://github.com/Lexorius/Stein-Divera-Sync-homeassistant-addon"
 arch:
@@ -19,9 +19,6 @@ hassio_api: false
 
 # Optionen für die Konfiguration
 options:
-  # Webserver Port (intern)
-  port: 8099
-
   # Divera Konfiguration
   divera_access_key: ""
   divera_base_url: "https://app.divera247.com/api/v2"
@@ -52,7 +49,6 @@ options:
   allow_direct_access: false
 
 schema:
-  port: port
   divera_access_key: password
   divera_base_url: url
   stein_api_key: password

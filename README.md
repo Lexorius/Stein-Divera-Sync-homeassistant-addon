@@ -40,7 +40,7 @@ siehe [steinapi-docker/README.md](./steinapi-docker/README.md).
 
 ### [SteinAPI - Divera Sync](./steinapi-addon)
 
-![Version](https://img.shields.io/badge/version-2.2.3-blue)
+![Version](https://img.shields.io/badge/version-2.2.4-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![PHP](https://img.shields.io/badge/PHP-8.4.27-777bb4)
@@ -69,10 +69,12 @@ Stein-Divera-Sync-homeassistant-addon/
 ├── steinapi-addon/        ← Home Assistant Add-on
 │   ├── config.yaml        ← Add-on-Optionen und Schema
 │   ├── build.yaml         ← Basis-Images (Alpine 3.24)
-│   ├── Dockerfile         ← HA-Supervisor-Build
+│   ├── Dockerfile         ← ein Dockerfile für Add-on und Standalone-Container
 │   ├── CHANGELOG.md
 │   └── rootfs/            ← PHP-App, nginx, php-fpm, MariaDB, Init-Skripte (SHARED)
-└── steinapi-docker/       ← Standalone-Docker-Variante (nutzt dieselbe rootfs/)
+├── steinapi-docker/       ← Standalone-Docker-Variante (Compose-Datei, baut dasselbe Dockerfile)
+├── tests/                 ← Sync-Simulation, läuft ohne echte APIs
+└── .github/workflows/     ← automatische Tests bei jedem Push
 ```
 
 ## 🔒 Sicherheit
