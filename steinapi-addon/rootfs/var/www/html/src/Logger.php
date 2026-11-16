@@ -8,6 +8,7 @@ class Logger {
     private $db;
     private $config;
     private $levels = ['debug' => 0, 'info' => 1, 'warning' => 2, 'error' => 3];
+    private $cleanedUp = false;
     
     public function __construct(Database $db, array $config) {
         $this->db = $db;
@@ -32,8 +33,12 @@ class Logger {
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
             
-            // Cleanup old logs
-            $this->cleanup();
+            // Alte Einträge nur einmal je Anfrage löschen. Ein Sync auf Stufe
+            // debug schreibt rund 80 Zeilen; vorher lief das DELETE nach jeder.
+            if (!$this->cleanedUp) {
+                $this->cleanedUp = true;
+                $this->cleanup();
+            }
         } catch (Exception $e) {
             // Fallback to file logging
             $this->logToFile($level, $message, $context);

@@ -1,7 +1,10 @@
 -- SteinAPI Database Schema
--- Creates all necessary tables for the sync system
+-- Creates all necessary tables for the sync system.
+-- Läuft nur bei der Erstinstallation. Bestehende Installationen behalten die
+-- früheren, ungenutzten Tabellen member_cache, field_config und settings;
+-- sie stören nicht und werden nicht mehr gelesen oder geschrieben.
 
--- Sync History Table
+-- Sync History Table: eine Zeile je Sync-Lauf, älter als 90 Tage wird gelöscht
 CREATE TABLE IF NOT EXISTS sync_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     direction VARCHAR(50) NOT NULL DEFAULT 'both',
@@ -16,7 +19,7 @@ CREATE TABLE IF NOT EXISTS sync_history (
     INDEX idx_source (source)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Sync Logs Table
+-- Sync Logs Table: Aktivitätsprotokoll, begrenzt durch die Option max_log_entries
 CREATE TABLE IF NOT EXISTS sync_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     level VARCHAR(20) NOT NULL DEFAULT 'info',
@@ -26,36 +29,6 @@ CREATE TABLE IF NOT EXISTS sync_logs (
     INDEX idx_timestamp (timestamp),
     INDEX idx_level (level)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Member Cache Table (for tracking sync state)
-CREATE TABLE IF NOT EXISTS member_cache (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    divera_id VARCHAR(100),
-    stein_id VARCHAR(100),
-    data_hash VARCHAR(64) NOT NULL,
-    last_synced DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE INDEX idx_divera_id (divera_id),
-    UNIQUE INDEX idx_stein_id (stein_id),
-    INDEX idx_last_synced (last_synced)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Field Configuration Table
-CREATE TABLE IF NOT EXISTS field_config (
-    id INT PRIMARY KEY DEFAULT 1,
-    config JSON NOT NULL,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Insert default field configuration for VEHICLES
-INSERT INTO field_config (id, config) VALUES (1, '{
-    "status": true,
-    "radio_name": true,
-    "comment": false,
-    "category": false,
-    "name": false
-}') ON DUPLICATE KEY UPDATE id = id;
 
 -- Zuletzt synchronisierter Stand je Fahrzeug (Schlüssel = Kennzeichen).
 -- Grundlage für den feldweisen Abgleich: nur wer vom letzten gemeinsamen Stand
@@ -68,20 +41,6 @@ CREATE TABLE IF NOT EXISTS sync_state (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Settings Table
-CREATE TABLE IF NOT EXISTS settings (
-    name VARCHAR(100) PRIMARY KEY,
-    value TEXT,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Insert default settings
-INSERT INTO settings (name, value) VALUES 
-    ('last_sync', NULL),
-    ('auto_sync_enabled', 'true'),
-    ('sync_direction', 'both')
-ON DUPLICATE KEY UPDATE name = name;
-
 -- Initial log entry
-INSERT INTO sync_logs (level, message, context) VALUES 
-    ('info', 'SteinAPI initialized', '{"version": "2.2.0"}');
+INSERT INTO sync_logs (level, message, context) VALUES
+    ('info', 'SteinAPI initialized', '{"version": "2.2.3"}');

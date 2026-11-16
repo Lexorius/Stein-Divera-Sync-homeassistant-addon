@@ -26,6 +26,7 @@
 
 class SyncService {
     private const LOCK_NAME = 'steinapi_sync';
+    private const HISTORY_RETENTION_DAYS = 90;
 
     private $db;
     private $divera;
@@ -47,9 +48,8 @@ class SyncService {
         $this->stein = $stein;
         $this->logger = $logger;
         $this->config = $config;
-
-        // Setze Zeitzone
-        date_default_timezone_set('Europe/Berlin');
+        // Die Zeitzone setzt api.php aus der Add-on-Option "timezone". Hier stand
+        // bis 2.2.2 ein festes Europe/Berlin, das die Option wieder überschrieb.
     }
 
     // ------------------------------------------------------------------
@@ -182,8 +182,7 @@ class SyncService {
     public function sync(string $direction = 'both', string $source = 'manual'): array {
         $this->logger->info("Starting sync ($direction) from $source");
 
-        $timezone = new DateTimeZone('Europe/Berlin');
-        $syncStartTime = new DateTime('now', $timezone);
+        $syncStartTime = new DateTime('now');
 
         $results = [
             'direction' => $direction,
@@ -281,7 +280,6 @@ class SyncService {
             // false = Tabelle sync_state nicht nutzbar, es galt nur der Zeitstempel
             $results['state_tracking'] = $this->stateAvailable;
 
-            $this->updateLastSync();
             $this->logger->info('Sync completed', $results);
 
         } catch (Exception $e) {
@@ -505,24 +503,13 @@ class SyncService {
     }
 
     /**
-     * Aktualisiere letzte Sync-Zeit
-     */
-    private function updateLastSync(): void {
-        try {
-            $this->db->execute(
-                "INSERT INTO settings (name, value) VALUES ('last_sync', ?)
-                 ON DUPLICATE KEY UPDATE value = ?",
-                [date('c'), date('c')]
-            );
-        } catch (Exception $e) {
-            // Ignore
-        }
-    }
-
-    /**
      * Speichere Sync-History: genau EINE Zeile je Lauf.
      * Bis 2.2.1 kam zusätzlich eine Zeile je Fahrzeug dazu, wodurch die Kachel
      * "Synchronisiert" (Summe über synced_count) jedes Fahrzeug doppelt zählte.
+     *
+     * Die Tabelle wächst um eine Zeile je Lauf (bei 5 Minuten rund 105.000
+     * Zeilen im Jahr). Das Dashboard braucht nur den letzten Lauf und die
+     * Summe des Tages, deshalb werden ältere Zeilen hier gelöscht.
      */
     private function saveSyncHistory(array $stats): void {
         try {
@@ -536,6 +523,9 @@ class SyncService {
                 'success' => ($stats['success'] ?? false) ? 1 : 0,
                 'created_at' => date('Y-m-d H:i:s')
             ]);
+            $this->db->execute(
+                "DELETE FROM sync_history WHERE created_at < DATE_SUB(NOW(), INTERVAL " . self::HISTORY_RETENTION_DAYS . " DAY)"
+            );
         } catch (Exception $e) {
             $this->logger->error('Failed to save sync history: ' . $e->getMessage());
         }
@@ -570,9 +560,9 @@ class SyncService {
                 }
             }
 
-            // Syncs heute
+            // Syncs heute (Bereichsvergleich statt DATE(created_at), damit der Index greift)
             $today = $this->db->fetchOne(
-                "SELECT SUM(synced_count) as total FROM sync_history WHERE DATE(created_at) = CURDATE()"
+                "SELECT SUM(synced_count) as total FROM sync_history WHERE created_at >= CURDATE()"
             );
             $stats['synced_today'] = (int)($today['total'] ?? 0);
 

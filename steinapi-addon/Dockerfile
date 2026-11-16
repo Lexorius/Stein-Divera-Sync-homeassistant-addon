@@ -14,17 +14,8 @@ RUN apk add --no-cache \
     php84-fpm \
     php84-pdo \
     php84-pdo_mysql \
-    php84-pdo_sqlite \
-    php84-sqlite3 \
     php84-curl \
-    php84-mbstring \
     php84-openssl \
-    php84-session \
-    php84-ctype \
-    php84-dom \
-    php84-xml \
-    php84-simplexml \
-    php84-tokenizer \
     mariadb \
     mariadb-client \
     mariadb-common \

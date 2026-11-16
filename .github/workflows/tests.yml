@@ -1,0 +1,114 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  sync-logic:
+    name: Syntax und Sync-Simulation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP-Version
+        run: php -v
+
+      - name: PHP-Syntax
+        run: find steinapi-addon/rootfs/var/www/html tests -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Shell-Syntax
+        run: |
+          for f in steinapi-addon/rootfs/usr/local/bin/*.sh steinapi-docker/docker-entrypoint.sh; do
+            bash -n "$f"
+          done
+
+      - name: Übersetzungen sind gültiges JSON
+        run: jq empty steinapi-addon/translations/*.yaml
+
+      - name: Sync-Simulation
+        run: php tests/sync_simulation.php
+
+  container:
+    name: Image bauen und starten
+    runs-on: ubuntu-latest
+    env:
+      API: http://127.0.0.1:8099/api.php
+    steps:
+      - uses: actions/checkout@v4
+
+      # Das Standalone-Image nutzt dieselbe rootfs/ wie das Home-Assistant-Add-on.
+      - name: Image bauen
+        run: docker build -f steinapi-docker/Dockerfile -t steinapi-test .
+
+      # Die API-URLs zeigen auf einen geschlossenen lokalen Port: der Test
+      # spricht nie mit den echten Diensten von Divera oder Stein.app.
+      - name: Container starten
+        run: |
+          docker run -d --name steinapi -p 127.0.0.1:8099:8099 \
+            -e DIVERA_BASE_URL=https://127.0.0.1:9 \
+            -e STEIN_BASE_URL=https://127.0.0.1:9 \
+            steinapi-test
+          for i in $(seq 1 60); do
+            if curl -fsS "$API?action=health" >/dev/null 2>&1; then
+              echo "bereit nach $((i * 2)) Sekunden"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Container wurde nicht bereit"
+          exit 1
+
+      - name: nginx- und php-fpm-Konfiguration
+        run: |
+          docker exec steinapi nginx -t
+          docker exec steinapi php-fpm -t
+
+      - name: Endpunkte antworten
+        run: |
+          code() { curl -s -o /dev/null -w '%{http_code}' "$1"; }
+          test "$(code "$API?action=health")" = 200
+          test "$(code "$API?action=stats")" = 200
+          test "$(code "$API?action=logs&limit=10")" = 200
+          test "$(code "$API?action=config")" = 200
+          test "$(code "http://127.0.0.1:8099/")" = 200
+          # gesperrt bzw. entfernt
+          test "$(code "http://127.0.0.1:8099/config/config.php")" = 404
+          test "$(code "http://127.0.0.1:8099/install.sql")" = 404
+          test "$(code "$API?action=fieldConfig")" = 404
+          test "$(code "$API?action=rawStein")" = 403
+
+      # Ohne erreichbare APIs endet der Lauf mit einem Fehler im Ergebnis. Er
+      # durchläuft dabei Sperre, Protokoll und Verlauf gegen die echte MariaDB.
+      - name: Sync-Lauf gegen die echte Datenbank
+        run: |
+          curl -fsS -X POST -H 'Content-Type: application/json' -d '{"source":"ci"}' "$API?action=sync" | tee sync.json
+          jq -e '.success == true and .data.busy == false and .data.success == false and .data.errors == 1' sync.json
+          curl -fsS "$API?action=stats" | tee stats.json
+          jq -e '.success == true and .data.last_sync != null and .data.synced_today == 0' stats.json
+          curl -fsS "$API?action=logs&limit=50" | jq -e '[.data.logs[].message] | any(startswith("Sync failed"))'
+
+      - name: Zugriffsbeschränkung (allow_direct_access=false)
+        run: |
+          docker rm -f steinapi
+          docker run -d --name steinapi -p 127.0.0.1:8099:8099 \
+            -e ALLOW_DIRECT_ACCESS=false \
+            -e DIVERA_BASE_URL=https://127.0.0.1:9 \
+            -e STEIN_BASE_URL=https://127.0.0.1:9 \
+            steinapi-test
+          for i in $(seq 1 60); do
+            if docker exec steinapi curl -fsS "http://127.0.0.1:8099/api.php?action=health" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          # aus dem Container selbst (Cron, Healthcheck): erlaubt
+          docker exec steinapi curl -fsS "http://127.0.0.1:8099/api.php?action=health"
+          # von außen über den veröffentlichten Port: abgelehnt
+          code() { curl -s -o /dev/null -w '%{http_code}' "$1"; }
+          test "$(code "$API?action=health")" = 403
+          test "$(code "http://127.0.0.1:8099/")" = 403
+
+      - name: Container-Protokoll
+        if: always()
+        run: docker logs steinapi 2>&1 | tail -n 80

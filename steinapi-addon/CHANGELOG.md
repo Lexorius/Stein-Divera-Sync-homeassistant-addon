@@ -5,6 +5,34 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.3] - 2026-11-17
+
+Aufräumen nach dem Code-Audit. Am Verhalten der Synchronisation ändert sich nichts.
+
+### Behoben
+- **Verlaufstabelle wuchs ohne Grenze**: Jeder Lauf schrieb eine Zeile, gelöscht wurde nie. Zeilen,
+  die älter als 90 Tage sind, werden jetzt nach jedem Lauf entfernt. Die Tagesabfrage des
+  Dashboards nutzt einen Datumsbereich und damit den Index.
+- **Zeitzone**: Der Sync-Dienst setzte bei jeder Anfrage fest `Europe/Berlin` und überschrieb damit
+  die Option `timezone`. Für Installationen mit `Europe/Berlin` ändert sich nichts.
+- **Protokoll**: Alte Einträge werden nur noch einmal je Anfrage gelöscht statt nach jeder
+  geschriebenen Zeile.
+
+### Hinzugefügt
+- **Automatische Tests** (GitHub Actions) bei jedem Push: Syntax von PHP und Shell, die
+  Sync-Simulation, Bau und Start des Images, nginx- und php-fpm-Konfiguration, die Endpunkte,
+  ein Sync-Lauf gegen die echte MariaDB und die Zugriffsbeschränkung aus 2.2.2.
+
+### Entfernt
+- Neun ungenutzte PHP-Erweiterungen aus beiden Images (`pdo_sqlite`, `sqlite3`, `mbstring`,
+  `session`, `ctype`, `dom`, `xml`, `simplexml`, `tokenizer`). Ohne Session-Erweiterung gibt es
+  `session.upload_progress` nicht mehr, einen der Angriffswege aus CVE-2026-109619.
+- Ungenutzte Tabellen `member_cache`, `field_config` und `settings` aus dem Schema für
+  Neuinstallationen sowie der Schreibzugriff auf `settings`. Bestehende Installationen behalten
+  die Tabellen, sie werden nicht mehr verwendet.
+- nginx-Regeln für eingebettete Dateien und Pfadumschreibung. Das Dashboard ist eine einzelne
+  Datei ohne externe Verweise, die Regeln griffen nie.
+
 ## [2.2.2] - 2026-11-17
 
 **Wichtig vor dem Update:** Wer das Dashboard nicht über die Home-Assistant-Seitenleiste, sondern
