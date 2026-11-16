@@ -33,6 +33,9 @@ echo "[ENTRYPOINT] Erzeuge $CONFIG_PATH aus ENV-Variablen..."
 : "${RATE_LIMIT_REQUESTS:=100}"
 : "${RATE_LIMIT_WINDOW_SECONDS:=60}"
 : "${DEBUG_ENDPOINTS:=false}"
+# Im Standalone-Container gibt es kein Ingress: der Zugriff kommt immer direkt
+# über den veröffentlichten Port (Standard: nur 127.0.0.1, siehe docker-compose.yml).
+: "${ALLOW_DIRECT_ACCESS:=true}"
 
 # Hilfsfunktionen: ENV-Werte robust in JSON-Typen überführen
 to_bool() {
@@ -70,6 +73,7 @@ jq -n \
     --argjson rate_limit_requests "$(to_int "$RATE_LIMIT_REQUESTS" 100)" \
     --argjson rate_limit_window_seconds "$(to_int "$RATE_LIMIT_WINDOW_SECONDS" 60)" \
     --argjson debug_endpoints "$(to_bool "$DEBUG_ENDPOINTS")" \
+    --argjson allow_direct_access "$(to_bool "$ALLOW_DIRECT_ACCESS")" \
     '{
         port: $port,
         divera_access_key: $divera_access_key,
@@ -85,7 +89,8 @@ jq -n \
         max_log_entries: $max_log_entries,
         rate_limit_requests: $rate_limit_requests,
         rate_limit_window_seconds: $rate_limit_window_seconds,
-        debug_endpoints: $debug_endpoints
+        debug_endpoints: $debug_endpoints,
+        allow_direct_access: $allow_direct_access
     }' > "$CONFIG_PATH"
 chmod 600 "$CONFIG_PATH"
 

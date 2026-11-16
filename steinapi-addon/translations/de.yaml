@@ -59,6 +59,10 @@
     "debug_endpoints": {
       "name": "Debug-Endpunkte aktivieren",
       "description": "Schaltet die Debug-Endpunkte (debug, compareData, rawDivera, rawStein, testSteinRaw) frei. Diese geben Rohdaten beider APIs ohne Authentifizierung aus - nur vorübergehend zur Fehlersuche aktivieren!"
+    },
+    "allow_direct_access": {
+      "name": "Direktzugriff auf Port 8099 erlauben",
+      "description": "Aus: Das Dashboard ist nur über die Home-Assistant-Seitenleiste (Ingress) erreichbar, andere Add-ons und ein freigegebener Port erhalten HTTP 403. An: Jeder, der den Port erreicht, kann die API ohne Anmeldung nutzen - nur in einem vertrauenswürdigen Netzwerk aktivieren."
     }
   }
 }

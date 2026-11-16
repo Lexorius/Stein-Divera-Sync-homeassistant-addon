@@ -5,6 +5,34 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.2] - 2026-11-17
+
+**Wichtig vor dem Update:** Wer das Dashboard nicht über die Home-Assistant-Seitenleiste, sondern
+direkt über den freigegebenen Port 8099 aufruft oder die API aus einer Automation abfragt, muss
+nach dem Update die neue Option `allow_direct_access` einschalten. Sonst antwortet das Add-on dort
+mit HTTP 403.
+
+### Sicherheit
+- **Zugriff auf Ingress beschränkt**: Der Webserver nimmt nur noch Anfragen von Home Assistant
+  Ingress (Supervisor, `172.30.32.2`) und aus dem Container selbst an. Bisher konnte jedes andere
+  Add-on auf demselben Gerät die API im internen Netz ohne Anmeldung aufrufen, also einen Sync
+  erzwingen oder das Protokoll lesen. Die neue Option `allow_direct_access` (Standard `false`)
+  hebt die Beschränkung auf. Im Standalone-Container ist sie standardmäßig an
+  (`ALLOW_DIRECT_ACCESS=true`), dort ändert sich nichts.
+
+### Behoben
+- **Kachel „Synchronisiert" zählte doppelt**: Jedes synchronisierte Fahrzeug wurde einmal als
+  eigene Zeile und einmal in der Summe des Laufs gezählt. Es gibt jetzt nur noch eine Zeile je
+  Lauf. Die Zahl des Update-Tages kann noch zu hoch sein, ab dem Folgetag stimmt sie.
+- **Backup**: `backup: cold`. Home Assistant hält das Add-on für die Dauer einer Sicherung an.
+  Vorher wurden die Dateien der laufenden MariaDB kopiert, was nach einer Wiederherstellung zu
+  einer nicht startenden Datenbank führen kann.
+
+### Entfernt
+- **Bereich „Fahrzeug-Feld-Konfiguration" im Dashboard** samt den Endpunkten `fieldConfig` und
+  `updateField`. Die Häkchen hatten keine Wirkung: Der Server schrieb beim Umschalten nur eine
+  Logzeile, Status und Notiz wurden immer synchronisiert. Daran ändert sich nichts.
+
 ## [2.2.1] - 2026-11-15
 
 ### Hinzugefügt

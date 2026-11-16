@@ -40,7 +40,7 @@ siehe [steinapi-docker/README.md](./steinapi-docker/README.md).
 
 ### [SteinAPI - Divera Sync](./steinapi-addon)
 
-![Version](https://img.shields.io/badge/version-2.2.1-blue)
+![Version](https://img.shields.io/badge/version-2.2.2-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![PHP](https://img.shields.io/badge/PHP-8.4.27-777bb4)
@@ -79,8 +79,9 @@ Stein-Divera-Sync-homeassistant-addon/
 
 - Die API hat **keine eigene Authentifizierung**. Im Add-on erfolgt der Zugriff über HA Ingress
   (durch Home Assistant abgesichert); der Port `8099` ist standardmäßig **nicht** freigegeben und
-  sollte es auch bleiben. Im Standalone-Container ist der Port standardmäßig nur auf `127.0.0.1`
-  gebunden.
+  sollte es auch bleiben. Der Webserver des Add-ons nimmt nur Ingress und localhost an, andere
+  Add-ons erhalten HTTP 403 (Ausnahme: Option `allow_direct_access`). Im Standalone-Container ist
+  der Port standardmäßig nur auf `127.0.0.1` gebunden.
 - Debug-Endpunkte sind standardmäßig deaktiviert (`debug_endpoints: false`).
 - Sicherheitsprobleme bitte **nicht** als öffentliches Issue melden, sondern per E-Mail an den
   Maintainer (siehe GitHub-Profil [@Lexorius](https://github.com/Lexorius)).

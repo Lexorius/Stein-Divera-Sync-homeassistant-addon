@@ -59,6 +59,10 @@
     "debug_endpoints": {
       "name": "Enable debug endpoints",
       "description": "Enables the debug endpoints (debug, compareData, rawDivera, rawStein, testSteinRaw). They expose raw data of both APIs without authentication - enable only temporarily for troubleshooting!"
+    },
+    "allow_direct_access": {
+      "name": "Allow direct access to port 8099",
+      "description": "Off: the dashboard is reachable only through the Home Assistant sidebar (Ingress); other add-ons and a published port get HTTP 403. On: anyone who can reach the port can use the API without authentication - enable only on a trusted network."
     }
   }
 }

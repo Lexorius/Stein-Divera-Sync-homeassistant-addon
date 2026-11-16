@@ -142,43 +142,6 @@ try {
             ]);
             break;
 
-        case 'fieldConfig':
-            // Get field configuration
-            $fields = $syncService->getFieldConfig();
-            echo json_encode([
-                'success' => true,
-                'data' => ['fields' => $fields]
-            ]);
-            break;
-
-        case 'updateField':
-            // Update field configuration
-            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-                apiError(405, 'POST method required');
-            }
-
-            $input = readJsonBody();
-            if (!isset($input['field'], $input['enabled'])) {
-                apiError(400, 'Field and enabled parameters required');
-            }
-
-            $field = $input['field'];
-            if (!is_string($field) || !preg_match('/^[a-z_]{1,50}$/', $field)) {
-                apiError(400, 'Invalid field name');
-            }
-
-            $enabled = filter_var($input['enabled'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-            if ($enabled === null) {
-                apiError(400, 'Parameter enabled must be a boolean');
-            }
-
-            $syncService->updateFieldConfig($field, $enabled);
-            echo json_encode([
-                'success' => true,
-                'message' => 'Field configuration updated'
-            ]);
-            break;
-
         case 'testConnection':
             // Test connections to both services
             $results = [

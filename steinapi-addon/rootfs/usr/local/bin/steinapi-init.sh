@@ -8,6 +8,7 @@ WWW_DIR=/var/www/html
 DB_PASS_FILE=$DATA_DIR/db_password
 DB_VERSION_FILE=$DATA_DIR/mariadb_version
 RATELIMIT_CONF=/etc/nginx/steinapi-ratelimit.conf
+ACCESS_CONF=/etc/nginx/steinapi-access.conf
 
 echo "============================================"
 echo "SteinAPI Add-on Initialisierung"
@@ -82,6 +83,7 @@ MAX_LOG_ENTRIES=$(int_or "$(jq -r '.max_log_entries // 1000' "$CONFIG_PATH")" 10
 RATE_LIMIT_REQUESTS=$(int_or "$(jq -r '.rate_limit_requests // 100' "$CONFIG_PATH")" 100)
 RATE_LIMIT_WINDOW=$(int_or "$(jq -r '.rate_limit_window_seconds // 60' "$CONFIG_PATH")" 60)
 DEBUG_ENDPOINTS=$(bool_or "$(jq -r '.debug_endpoints // false' "$CONFIG_PATH")" false)
+ALLOW_DIRECT_ACCESS=$(bool_or "$(jq -r '.allow_direct_access // false' "$CONFIG_PATH")" false)
 
 [ "$SYNC_INTERVAL" -ge 1 ] || SYNC_INTERVAL=1
 [ "$RATE_LIMIT_REQUESTS" -ge 1 ] || RATE_LIMIT_REQUESTS=1
@@ -225,6 +227,28 @@ EOF
     echo "[INFO] Stoppe temporäre MariaDB-Instanz..."
     "$MARIADB_ADMIN" --protocol=socket -u root shutdown
     wait "$MARIADB_TMP_PID" 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
+# nginx Zugriffsbeschränkung
+# Die API hat keine eigene Anmeldung. Standard: nur Home Assistant Ingress
+# (Supervisor, 172.30.32.2) und der Container selbst (Cron, Healthcheck).
+# Andere Add-ons im internen Netz und ein freigegebener Port bekommen HTTP 403.
+# ---------------------------------------------------------------------------
+if [ "$ALLOW_DIRECT_ACCESS" = "true" ]; then
+    cat > "$ACCESS_CONF" <<EOF
+# Automatisch erzeugt von steinapi-init.sh (allow_direct_access=true): keine Beschränkung
+EOF
+    echo "[WARN] allow_direct_access ist aktiv - die API ist ohne Anmeldung für alle erreichbar, die den Port 8099 erreichen."
+else
+    cat > "$ACCESS_CONF" <<EOF
+# Automatisch erzeugt von steinapi-init.sh (allow_direct_access=false)
+allow 127.0.0.1;
+allow ::1;
+allow 172.30.32.2;
+deny all;
+EOF
+    echo "[INFO] Zugriff: nur Home Assistant Ingress (172.30.32.2) und localhost."
 fi
 
 # ---------------------------------------------------------------------------

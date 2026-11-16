@@ -106,6 +106,9 @@ Browser → <http://localhost:8099>
   auslösen und Logs lesen. Deshalb bindet `docker-compose.yml` den Port standardmäßig
   nur an `127.0.0.1`. Für Zugriff aus dem LAN `"8099:8099"` eintragen und den Zugriff
   per Firewall oder Reverse-Proxy mit Login absichern.
+- `ALLOW_DIRECT_ACCESS=true` (Standard im Standalone-Container) lässt Anfragen über den
+  veröffentlichten Port zu. Im Home-Assistant-Add-on ist der Standard `false`: dort nimmt der
+  Webserver nur Ingress und localhost an.
 - `DEBUG_ENDPOINTS=false` (Standard) sperrt die Debug-Endpunkte, die Rohdaten
   beider APIs ausgeben. Nur vorübergehend zur Fehlersuche aktivieren.
 - API-Keys landen beim Start in `/data/options.json` und `config.php` (nur root bzw.

@@ -1,6 +1,6 @@
 # SteinAPI Home Assistant Add-on
 
-![Version](https://img.shields.io/badge/version-2.2.1-blue)
+![Version](https://img.shields.io/badge/version-2.2.2-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![PHP](https://img.shields.io/badge/PHP-8.4.27-777bb4)
@@ -120,6 +120,7 @@ Assistant nicht mehr mit Basis-Images versorgt und seit 2.1.0 nicht mehr unterst
 | `rate_limit_requests` | HTTP-Anfragen an `/api.php` pro Zeitfenster und Client-IP | `100` |
 | `rate_limit_window_seconds` | Zeitfenster für das HTTP-Rate-Limit | `60` |
 | `debug_endpoints` | Debug-Endpunkte freischalten (siehe unten) | `false` |
+| `allow_direct_access` | Zugriff auf Port 8099 außerhalb von Ingress erlauben (siehe Sicherheit) | `false` |
 
 ### Beispielkonfiguration
 
@@ -139,6 +140,7 @@ max_log_entries: 1000
 rate_limit_requests: 100
 rate_limit_window_seconds: 60
 debug_endpoints: false
+allow_direct_access: false
 ```
 
 ## 📊 Dashboard
@@ -164,8 +166,6 @@ ausblenden" reduziert die Liste auf Meldungen ab Stufe `info`.
 | `/api.php?action=stats` | GET | Statistiken |
 | `/api.php?action=logs&limit=50` | GET | Logs (`limit` 1-1000) |
 | `/api.php?action=sync` | POST | Sync starten, Body: `{"direction":"both"}` |
-| `/api.php?action=fieldConfig` | GET | Feld-Konfiguration |
-| `/api.php?action=updateField` | POST | Feld aktualisieren, Body: `{"field":"status","enabled":true}` |
 | `/api.php?action=testConnection` | GET | Verbindung zu beiden APIs testen |
 | `/api.php?action=config` | GET | Aktive Konfiguration (ohne Secrets) |
 
@@ -198,8 +198,15 @@ Systemtabellen automatisch migriert.
 ## 🔒 Sicherheit
 
 - **Zugriff:** Die API selbst hat keine Authentifizierung. Über Ingress ist sie durch Home Assistant
-  geschützt. Der Port `8099` ist standardmäßig **nicht** freigegeben - so belassen, sofern das
-  Netzwerk nicht vertrauenswürdig ist.
+  geschützt. Der Webserver nimmt deshalb nur Anfragen von Home Assistant Ingress (`172.30.32.2`)
+  und aus dem Container selbst an. Andere Add-ons auf demselben Gerät und ein freigegebener Port
+  erhalten HTTP 403.
+- **Direktzugriff:** Wer das Dashboard über den Port `8099` oder die API aus einer Automation
+  nutzen will, gibt den Port frei **und** setzt `allow_direct_access: true`. Dann kann jeder, der
+  den Port erreicht, Syncs auslösen und das Protokoll lesen - nur in einem vertrauenswürdigen
+  Netzwerk verwenden.
+- **Backup:** Home Assistant hält das Add-on während einer Sicherung kurz an (`backup: cold`),
+  damit die Datenbankdateien in sich stimmig gesichert werden.
 - **Transport:** Verbindungen zu Divera und Stein.app erfolgen ausschließlich per `https` mit
   Zertifikatsprüfung, ohne Redirects.
 - **PHP:** 8.4.27 (Alpine 3.24), der Build bricht bei älteren Versionen ab. Multipart-Parsing,

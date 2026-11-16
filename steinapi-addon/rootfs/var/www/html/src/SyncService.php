@@ -274,8 +274,6 @@ class SyncService {
                 } else {
                     $results['errors']++;
                 }
-
-                $this->logSync($syncResult);
             }
 
             $results['completed_at'] = date('c');
@@ -507,26 +505,6 @@ class SyncService {
     }
 
     /**
-     * Speichere Sync in Log
-     */
-    private function logSync(array $result): void {
-        try {
-            $this->db->insert('sync_history', [
-                'direction' => $result['action'] ?? 'unknown',
-                'source' => 'sync',
-                'synced_count' => $result['success'] ? 1 : 0,
-                'created_count' => 0,
-                'updated_count' => $result['success'] ? 1 : 0,
-                'error_count' => $result['success'] ? 0 : 1,
-                'success' => $result['success'] ? 1 : 0,
-                'created_at' => date('Y-m-d H:i:s')
-            ]);
-        } catch (Exception $e) {
-            $this->logger->warning('Could not log sync: ' . $e->getMessage());
-        }
-    }
-
-    /**
      * Aktualisiere letzte Sync-Zeit
      */
     private function updateLastSync(): void {
@@ -542,7 +520,9 @@ class SyncService {
     }
 
     /**
-     * Speichere Sync-History
+     * Speichere Sync-History: genau EINE Zeile je Lauf.
+     * Bis 2.2.1 kam zusätzlich eine Zeile je Fahrzeug dazu, wodurch die Kachel
+     * "Synchronisiert" (Summe über synced_count) jedes Fahrzeug doppelt zählte.
      */
     private function saveSyncHistory(array $stats): void {
         try {
@@ -614,22 +594,5 @@ class SyncService {
         }
 
         return $stats;
-    }
-
-    /**
-     * Hole Feld-Konfiguration
-     */
-    public function getFieldConfig(): array {
-        return [
-            'status' => true,
-            'comment' => true
-        ];
-    }
-
-    /**
-     * Aktualisiere Feld-Konfiguration (Stub)
-     */
-    public function updateFieldConfig(string $field, bool $enabled): void {
-        $this->logger->info("Field config updated: $field = " . ($enabled ? 'enabled' : 'disabled'));
     }
 }

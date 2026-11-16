@@ -1,7 +1,7 @@
 ---
 name: "SteinAPI - Divera Sync"
 description: "API + Dashboard für die Synchronisation des Fahrzeugstatus zwischen Divera24-7 und Stein.app"
-version: "2.2.1"
+version: "2.2.2"
 slug: "steinapi"
 url: "https://github.com/Lexorius/Stein-Divera-Sync-homeassistant-addon"
 arch:
@@ -46,6 +46,11 @@ options:
   # Debug-Endpunkte (geben Rohdaten beider APIs aus - nur zur Fehlersuche aktivieren)
   debug_endpoints: false
 
+  # Zugriff auf Port 8099 von außerhalb der Home-Assistant-Oberfläche erlauben.
+  # false = nur Ingress (Seitenleiste) und der Container selbst. Die API hat
+  # keine eigene Anmeldung - nur aktivieren, wenn das Netzwerk vertrauenswürdig ist.
+  allow_direct_access: false
+
 schema:
   port: port
   divera_access_key: password
@@ -62,16 +67,18 @@ schema:
   rate_limit_requests: int(10,1000)
   rate_limit_window_seconds: int(10,3600)
   debug_endpoints: bool
+  allow_direct_access: bool
 
 # Ports die genutzt werden
 # Standardmäßig deaktiviert: Der Zugriff erfolgt über Ingress (durch HA authentifiziert).
 # Die API selbst hat KEINE Authentifizierung - den Port nur freigeben, wenn das
-# Netzwerk vertrauenswürdig ist.
+# Netzwerk vertrauenswürdig ist. Ein freigegebener Port antwortet erst, wenn
+# zusätzlich die Option allow_direct_access aktiv ist.
 ports:
   8099/tcp: null
 
 ports_description:
-  8099/tcp: "SteinAPI Webserver (ohne Authentifizierung - nur bei Bedarf freigeben)"
+  8099/tcp: "SteinAPI Webserver (ohne Authentifizierung - nur bei Bedarf freigeben, benötigt allow_direct_access)"
 
 # Startup-Reihenfolge
 startup: services
@@ -81,5 +88,9 @@ stage: stable
 watchdog: "http://[HOST]:[PORT:8099]/api.php?action=health"
 
 # Backup-Konfiguration
+# cold: Home Assistant hält das Add-on für die Dauer der Sicherung an. Im
+# Datenordner liegen die Dateien der MariaDB; eine Kopie im laufenden Betrieb
+# kann in sich unstimmig sein und nach der Wiederherstellung nicht mehr starten.
+backup: cold
 backup_exclude:
   - "*.log"
