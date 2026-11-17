@@ -1,6 +1,6 @@
 # SteinAPI Home Assistant Add-on
 
-![Version](https://img.shields.io/badge/version-2.2.5-blue)
+![Version](https://img.shields.io/badge/version-2.2.6-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![PHP](https://img.shields.io/badge/PHP-8.4.27-777bb4)
@@ -100,7 +100,7 @@ Assistant nicht mehr mit Basis-Images versorgt und seit 2.1.0 nicht mehr unterst
 |--------|--------------|
 | `stein_api_key` | API Key aus Stein.app |
 | `stein_business_unit_id` | Business Unit ID aus Stein.app |
-| `stein_base_url` | API URL (Standard: `https://www.stein.app/api`, nur `https`) |
+| `stein_base_url` | API URL (Standard: `https://stein.app/api/api/ext`, nur `https`) |
 
 ### Sync-Einstellungen
 
@@ -129,7 +129,7 @@ divera_access_key: "your-divera-access-key-here"
 divera_base_url: "https://app.divera247.com/api/v2"
 stein_api_key: "your-stein-api-key-here"
 stein_business_unit_id: "your-business-unit-id"
-stein_base_url: "https://www.stein.app/api"
+stein_base_url: "https://stein.app/api/api/ext"
 sync_interval_minutes: 5
 sync_direction: "both"
 auto_sync_enabled: true

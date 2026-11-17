@@ -40,7 +40,7 @@ siehe [steinapi-docker/README.md](./steinapi-docker/README.md).
 
 ### [SteinAPI - Divera Sync](./steinapi-addon)
 
-![Version](https://img.shields.io/badge/version-2.2.5-blue)
+![Version](https://img.shields.io/badge/version-2.2.6-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![PHP](https://img.shields.io/badge/PHP-8.4.27-777bb4)

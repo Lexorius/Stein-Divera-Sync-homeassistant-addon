@@ -18,7 +18,7 @@
     },
     "stein_base_url": {
       "name": "Stein.app API URL",
-      "description": "The base URL of the Stein.app API (default: https://www.stein.app/api, https only)"
+      "description": "The base URL of the Stein.app API (default: https://stein.app/api/api/ext, https only)"
     },
     "sync_interval_minutes": {
       "name": "Sync Interval (Minutes)",

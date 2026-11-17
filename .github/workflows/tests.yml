@@ -36,6 +36,15 @@ jobs:
             exit 1
           fi
 
+      # Die Voreinstellung der Stein-Adresse steht an mehreren Stellen (Add-on,
+      # Init-Skript, Container-Start, .env-Vorlage, Doku, Übersetzungen). Bis
+      # 2.2.5 stand dort eine Adresse, die nicht die funktionierende war.
+      # Der Changelog ist ausgenommen: er nennt die frühere Adresse als Historie.
+      - name: Stein-Adresse ist überall dieselbe
+        run: |
+          grep -rhoE --exclude=CHANGELOG.md 'https://[a-z.]*stein\.app/[a-z/]*' steinapi-addon steinapi-docker | sort | uniq -c
+          test "$(grep -rhoE --exclude=CHANGELOG.md 'https://[a-z.]*stein\.app/[a-z/]*' steinapi-addon steinapi-docker | sort -u)" = "https://stein.app/api/api/ext"
+
       - name: Sync-Simulation
         run: php tests/sync_simulation.php
 

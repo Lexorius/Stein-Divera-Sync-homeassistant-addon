@@ -1,7 +1,7 @@
 ---
 name: "SteinAPI - Divera Sync"
 description: "API + Dashboard für die Synchronisation des Fahrzeugstatus zwischen Divera24-7 und Stein.app"
-version: "2.2.5"
+version: "2.2.6"
 slug: "steinapi"
 url: "https://github.com/Lexorius/Stein-Divera-Sync-homeassistant-addon"
 arch:
@@ -26,7 +26,7 @@ options:
   # Stein.app Konfiguration
   stein_api_key: ""
   stein_business_unit_id: ""
-  stein_base_url: "https://www.stein.app/api"
+  stein_base_url: "https://stein.app/api/api/ext"
 
   # Sync Einstellungen
   sync_interval_minutes: 5

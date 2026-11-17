@@ -5,6 +5,24 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.6] - 2026-11-17
+
+### Behoben
+- **Voreingestellte Adresse der Stein-API**: Die Voreinstellung von `stein_base_url` lautete
+  `https://www.stein.app/api`. Die funktionierende Adresse ist `https://stein.app/api/api/ext`,
+  mit ihr arbeitet auch das Vorgängerprojekt steinapi. Die Voreinstellung ist in der
+  Add-on-Konfiguration, im Standalone-Container, in der Dokumentation und in den Übersetzungen
+  korrigiert.
+
+### Hinweis zum Update
+- Eine bereits gespeicherte Adresse wird **nicht** geändert. Wer in der Add-on-Konfiguration noch
+  `https://www.stein.app/api` stehen hat und keine Verbindung zu Stein.app bekommt, trägt dort
+  `https://stein.app/api/api/ext` ein. Im Standalone-Container gilt dasselbe für `STEIN_BASE_URL`
+  in der `.env`.
+
+### Geändert
+- Die automatischen Tests prüfen, dass an allen Stellen dieselbe Stein-Adresse steht.
+
 ## [2.2.5] - 2026-11-17
 
 Drei Schönheitsfehler im Protokoll des Add-ons. Am Verhalten ändert sich nichts.
