@@ -5,6 +5,22 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.5] - 2026-11-17
+
+Drei Schönheitsfehler im Protokoll des Add-ons. Am Verhalten ändert sich nichts.
+
+### Behoben
+- **Version im Startprotokoll**: Dort stand wörtlich `Version: ${BUILD_VERSION}`. `build.yaml`
+  übergab den Platzhalter als festen Text und überschrieb damit den Wert des Supervisors. Das
+  betraf auch das Versions-Label des Images.
+- **CRIT-Zeile von supervisord** bei jedem Start. Sie war harmlos, sah aber nach einem Problem aus.
+- **Warnung des Webservers bei großen Antworten** („an upstream response is buffered to a
+  temporary file"), etwa beim Laden von 500 Protokolleinträgen.
+
+### Geändert
+- Die automatischen Tests prüfen Versionsdatei und Label des Images, das Fehlen der CRIT-Zeile
+  und dass `build.yaml` keine Platzhalter enthält.
+
 ## [2.2.4] - 2026-11-17
 
 Protokoll und Dashboard-Anzeigen korrigiert. Am Verhalten der Synchronisation ändert sich nichts.

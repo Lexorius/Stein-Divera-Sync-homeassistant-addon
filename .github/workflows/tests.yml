@@ -26,6 +26,16 @@ jobs:
       - name: Übersetzungen sind gültiges JSON
         run: jq empty steinapi-addon/translations/*.yaml
 
+      # Der Supervisor ersetzt in build.yaml nichts. Ein Eintrag wie
+      # "BUILD_VERSION: ${BUILD_VERSION}" überschreibt den echten Wert mit dem
+      # Platzhalter (so geschehen bis 2.2.4).
+      - name: build.yaml enthält keine Platzhalter
+        run: |
+          if grep -n '\${' steinapi-addon/build.yaml; then
+            echo "build.yaml darf keine \${...}-Platzhalter enthalten"
+            exit 1
+          fi
+
       - name: Sync-Simulation
         run: php tests/sync_simulation.php
 
@@ -182,7 +192,9 @@ jobs:
         run: |
           docker exec addon nginx -t
           docker exec addon php-fpm -t
-          docker exec addon cat /etc/steinapi-version
+          # Version aus dem Build-Argument landet in Datei und Label
+          test "$(docker exec addon cat /etc/steinapi-version)" = ci
+          test "$(docker inspect -f '{{ index .Config.Labels "io.hass.version" }}' steinapi-addon-test)" = ci
           docker exec addon curl -fsS "http://127.0.0.1:8099/api.php?action=stats"
           # Standard im Add-on: nur Ingress und localhost. Von außen 403.
           test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8099/api.php?action=health")" = 403
@@ -191,6 +203,12 @@ jobs:
         run: |
           sleep 1
           docker logs addon > addon.log 2>&1
+          grep -F 'Version: ci' addon.log
+          # supervisord startet ohne CRIT-Meldung
+          if grep -F ' CRIT ' addon.log; then
+            echo "unerwartete CRIT-Meldung beim Start"
+            exit 1
+          fi
           grep -F 'Zugriff: nur Home Assistant Ingress' addon.log
           grep -F '[CRON] SteinAPI Cron Service gestartet' addon.log
           grep -E 'ready to handle connections' addon.log

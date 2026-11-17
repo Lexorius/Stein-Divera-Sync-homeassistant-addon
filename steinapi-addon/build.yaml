@@ -11,11 +11,10 @@ labels:
   org.opencontainers.image.source: "https://github.com/Lexorius/Stein-Divera-Sync-homeassistant-addon"
   org.opencontainers.image.licenses: "MIT"
 
+# Nur feste Werte. BUILD_FROM, BUILD_ARCH und BUILD_VERSION setzt der Supervisor
+# selbst. Einträge hier überschreiben ihn und werden NICHT ersetzt: Bis 2.2.4
+# stand hier "BUILD_VERSION: ${BUILD_VERSION}", und das Add-on meldete beim
+# Start wörtlich "Version: ${BUILD_VERSION}".
 args:
-  BUILD_ARCH: ${BUILD_ARCH}
-  BUILD_DATE: ${BUILD_DATE}
   BUILD_DESCRIPTION: "Synchronization between Divera24-7 and Stein.app"
   BUILD_NAME: "SteinAPI"
-  BUILD_REF: ${BUILD_REF}
-  BUILD_REPOSITORY: ${BUILD_REPOSITORY}
-  BUILD_VERSION: ${BUILD_VERSION}
