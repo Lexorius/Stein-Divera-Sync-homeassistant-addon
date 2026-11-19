@@ -15,10 +15,11 @@
 ARG BUILD_FROM=alpine:3.24
 FROM ${BUILD_FROM} AS base
 
-# Mindestversion von PHP, die die Fixes für CVE-2026-109618 und CVE-2026-109619
-# (Remote Code Execution, php.net Security Advisory vom 21.10.2026) enthält.
-# Der Build bricht ab, wenn das Basis-Image eine ältere Version liefert.
-ARG PHP_MIN_VERSION=8.4.27
+# Mindestversion von PHP. 8.4.28 ist das Sicherheitsrelease vom 19.11.2026
+# (u. a. CVE-2026-129496 Date, CVE-2026-129289 und CVE-2026-129291 FPM) und
+# enthält die Fixes aus 8.4.27 (CVE-2026-109618, CVE-2026-109619).
+# Der Build bricht ab, wenn Alpine eine ältere Version liefert.
+ARG PHP_MIN_VERSION=8.4.28
 
 # Installiere notwendige Pakete
 # Hinweis: Alpine liefert kein php84-json mehr - JSON ist seit PHP 8 fest eingebaut.
@@ -42,7 +43,7 @@ RUN apk add --no-cache \
     tzdata \
     && ln -sf /usr/bin/php84 /usr/bin/php \
     && ln -sf /usr/sbin/php-fpm84 /usr/sbin/php-fpm \
-    && php -r 'if (version_compare(PHP_VERSION, $argv[1], "<")) { fwrite(STDERR, "FEHLER: PHP " . PHP_VERSION . " ist aelter als die geforderte Mindestversion " . $argv[1] . " (CVE-2026-109618/109619).\n"); exit(1); } echo "PHP " . PHP_VERSION . " erfuellt Mindestversion " . $argv[1] . "\n";' "$PHP_MIN_VERSION"
+    && php -r 'if (version_compare(PHP_VERSION, $argv[1], "<")) { fwrite(STDERR, "FEHLER: PHP " . PHP_VERSION . " ist aelter als die geforderte Mindestversion " . $argv[1] . " (Sicherheitsrelease, siehe CHANGELOG).\n"); exit(1); } echo "PHP " . PHP_VERSION . " erfuellt Mindestversion " . $argv[1] . "\n";' "$PHP_MIN_VERSION"
 
 # Erstelle Verzeichnisse
 RUN mkdir -p /var/www/html \

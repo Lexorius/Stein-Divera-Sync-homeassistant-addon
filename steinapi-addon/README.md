@@ -1,9 +1,9 @@
 # SteinAPI Home Assistant Add-on
 
-![Version](https://img.shields.io/badge/version-2.2.6-blue)
+![Version](https://img.shields.io/badge/version-2.2.7-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
-![PHP](https://img.shields.io/badge/PHP-8.4.27-777bb4)
+![PHP](https://img.shields.io/badge/PHP-8.4.28-777bb4)
 ![Alpine](https://img.shields.io/badge/Alpine-3.24-0d597f)
 
 API + Dashboard für die Synchronisation des **Fahrzeugstatus** zwischen **Divera24-7** und **Stein.app**.
@@ -208,7 +208,7 @@ Systemtabellen automatisch migriert.
   damit die Datenbankdateien in sich stimmig gesichert werden.
 - **Transport:** Verbindungen zu Divera und Stein.app erfolgen ausschließlich per `https` mit
   Zertifikatsprüfung, ohne Redirects.
-- **PHP:** 8.4.27 (Alpine 3.24), der Build bricht bei älteren Versionen ab. Multipart-Parsing,
+- **PHP:** 8.4.28 (Alpine 3.24), der Build bricht bei älteren Versionen ab. Multipart-Parsing,
   Datei-Uploads, `session.upload_progress`, `allow_url_fopen` und `expose_php` sind deaktiviert.
 - **Webserver:** Nur `/api.php` wird als PHP ausgeführt; `/config/`, `/src/` und `install.sql` sind
   gesperrt. Das Webroot ist für den Webserver-Prozess nur lesbar. Rate-Limit per nginx.

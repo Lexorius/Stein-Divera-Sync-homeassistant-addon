@@ -1,4 +1,4 @@
-# Alpine 3.24 liefert PHP 8.4.27 mit den Fixes für CVE-2026-109618 / CVE-2026-109619.
+# Alpine 3.24 liefert PHP 8.4 aus dem community-Repository. Die Mindestversion erzwingt das Dockerfile.
 # Home Assistant stellt Basis-Images nur noch für amd64 und aarch64 bereit;
 # armhf, armv7 und i386 werden von HA nicht mehr unterstützt.
 build_from:

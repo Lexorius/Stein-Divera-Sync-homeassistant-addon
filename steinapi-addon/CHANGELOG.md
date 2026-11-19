@@ -5,6 +5,22 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.7] - 2026-11-19
+
+**Sicherheitsrelease.** PHP 8.4.28, das Sicherheitsupdate von php.net vom 19.11.2026.
+
+### Sicherheit
+- **PHP auf 8.4.28 angehoben.** Der Build bricht ab, wenn Alpine eine ältere Version liefert.
+  Von den behobenen Lücken betreffen drei Bestandteile, die das Add-on nutzt:
+  - CVE-2026-129496 (Date): Use-after-free im Zeitzonen-Cache, kann zu Codeausführung führen.
+  - CVE-2026-129289 (FPM): Request-Smuggling über einen nicht gelesenen Request-Body.
+  - CVE-2026-129291 (FPM): Use-after-free in der epoll-Behandlung, lokale Rechteausweitung.
+- Die übrigen Lücken des Releases treffen Bestandteile, die im Image nicht enthalten oder nicht
+  eingeschaltet sind: php-cgi, DOM, Phar, SOAP, Session, die Statusseite von FPM und die
+  HTTP-Stream-Wrapper (`allow_url_fopen` ist aus). Session und DOM wurden mit 2.2.3 entfernt.
+- Einordnung: Das Add-on nimmt seit 2.2.2 nur Anfragen von Home Assistant Ingress und aus dem
+  Container selbst an. Ein Angreifer müsste also bereits in Home Assistant angemeldet sein.
+
 ## [2.2.6] - 2026-11-17
 
 ### Behoben
