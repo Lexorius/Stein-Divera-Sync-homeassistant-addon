@@ -5,6 +5,25 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
+## [2.2.7] - 2026-11-19
+
+**Zwischenlösung zum PHP-Sicherheitsrelease vom 19.11.2026.** Alpine liefert PHP 8.4.28 noch
+nicht aus. Diese Version setzt die von PHP dokumentierten Zwischenlösungen, soweit sie das
+Add-on betreffen. Das eigentliche Update auf 8.4.28 folgt, sobald das Paket verfügbar ist.
+
+### Sicherheit
+- **CVE-2026-129291** (php-fpm, Use-after-free in der epoll-Behandlung): `catch_workers_output`
+  ist jetzt aus. Die Lücke setzt die eingeschaltete Option voraus. Fehler aus PHP stehen weiterhin
+  im Protokoll des Add-ons, sie kommen jetzt über den Webserver.
+- **CVE-2026-129289** (php-fpm, Request-Smuggling): Die Lücke setzt voraus, dass der Webserver
+  Verbindungen zu php-fpm offen hält. Das war nie der Fall und ist jetzt ausdrücklich festgelegt
+  (`fastcgi_keep_conn off`).
+- **CVE-2026-129496** (Date, Use-after-free im Zeitzonen-Cache): Die Lücke setzt ein PHP-Fehlerprotokoll
+  in einer Datei voraus. Seit 2.2.4 schreibt PHP nicht mehr in eine Datei.
+- Nicht betroffen, weil nicht im Image oder nicht eingeschaltet: php-cgi, DOM, Phar, SOAP,
+  Session, die Statusseite von php-fpm und die HTTP-Stream-Wrapper.
+- Die automatischen Tests prüfen alle diese Voraussetzungen am gebauten Image.
+
 ## [2.2.6] - 2026-11-17
 
 ### Behoben
