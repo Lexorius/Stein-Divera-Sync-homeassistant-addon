@@ -5,16 +5,21 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
-## [2.2.8] - noch nicht veröffentlicht
+## [2.2.8] - 2026-11-20
 
-**Sicherheitsrelease.** PHP 8.4.28, das Sicherheitsupdate von php.net vom 19.11.2026. Wird
-veröffentlicht, sobald Alpine 3.24 das Paket ausliefert.
+**Sicherheitsrelease.** PHP 8.4.28, das Sicherheitsupdate von php.net vom 19.11.2026.
 
 ### Sicherheit
-- **PHP auf 8.4.28 angehoben.** Der Build bricht ab, wenn Alpine eine ältere Version liefert.
-  Damit sind die Lücken behoben, für die 2.2.7 nur die Voraussetzungen entfernt hat:
-  CVE-2026-129496 (Date), CVE-2026-129289 und CVE-2026-129291 (php-fpm).
+- **PHP auf 8.4.28 angehoben.** Damit sind die Lücken behoben, für die 2.2.7 nur die
+  Voraussetzungen entfernt hat: CVE-2026-129496 (Date), CVE-2026-129289 und CVE-2026-129291
+  (php-fpm). Der Build bricht ab, wenn eine ältere Version installiert wird.
 - Die Einstellungen aus 2.2.7 bleiben bestehen.
+
+### Hinweis
+- **Die PHP-Pakete kommen vorübergehend aus Alpine edge**, dem Entwicklungszweig von Alpine,
+  weil Alpine 3.24 die Version 8.4.28 noch nicht ausliefert. Alle anderen Pakete stammen weiter
+  aus 3.24. Sobald 3.24 nachzieht, wechselt das Add-on mit einem weiteren Update zurück.
+- Die automatischen Tests bauen und starten das Add-on jetzt für amd64 und aarch64.
 
 ## [2.2.7] - 2026-11-19
 

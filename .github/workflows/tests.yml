@@ -182,14 +182,23 @@ jobs:
   # Basis-Image des Supervisors, gestartet wie im Add-on über s6 und mit einer
   # options.json unter /data.
   addon:
-    name: Add-on-Image bauen und starten
-    runs-on: ubuntu-latest
+    name: Add-on-Image bauen und starten (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          # nativer ARM-Rechner von GitHub, kein Emulator
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
 
       - name: Basis-Image aus build.yaml lesen
         run: |
-          BASE=$(sed -n 's/^ *amd64: *//p' steinapi-addon/build.yaml)
+          BASE=$(sed -n 's/^ *${{ matrix.arch }}: *//p' steinapi-addon/build.yaml)
           test -n "$BASE"
           echo "BASE=$BASE" >> "$GITHUB_ENV"
           echo "Basis-Image: $BASE"
@@ -198,7 +207,7 @@ jobs:
         run: |
           docker build \
             --build-arg BUILD_FROM="$BASE" \
-            --build-arg BUILD_ARCH=amd64 \
+            --build-arg BUILD_ARCH=${{ matrix.arch }} \
             --build-arg BUILD_VERSION=ci \
             -t steinapi-addon-test steinapi-addon
 
@@ -226,6 +235,12 @@ jobs:
           test "$(docker exec addon cat /etc/steinapi-version)" = ci
           test "$(docker inspect -f '{{ index .Config.Labels "io.hass.version" }}' steinapi-addon-test)" = ci
           docker exec addon curl -fsS "http://127.0.0.1:8099/api.php?action=stats"
+          docker exec addon php -r 'echo "PHP ", PHP_VERSION, " auf ", php_uname("m"), PHP_EOL;'
+          # Sync-Lauf nutzt curl und pdo_mysql. Ohne erreichbare APIs endet er mit
+          # einem Fehler im Ergebnis, die Anfrage selbst muss aber gelingen.
+          docker exec addon curl -fsS -X POST -H 'Content-Type: application/json' \
+            -d '{"source":"ci"}' "http://127.0.0.1:8099/api.php?action=sync" \
+            | tee sync.json | jq -e '.success == true and .data.busy == false'
           # Standard im Add-on: nur Ingress und localhost. Von außen 403.
           test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8099/api.php?action=health")" = 403
 

@@ -25,12 +25,6 @@ ARG PHP_MIN_VERSION=8.4.28
 # Hinweis: Alpine liefert kein php84-json mehr - JSON ist seit PHP 8 fest eingebaut.
 RUN apk add --no-cache \
     nginx \
-    php84 \
-    php84-fpm \
-    php84-pdo \
-    php84-pdo_mysql \
-    php84-curl \
-    php84-openssl \
     mariadb \
     mariadb-client \
     mariadb-common \
@@ -40,7 +34,23 @@ RUN apk add --no-cache \
     ca-certificates \
     jq \
     bash \
-    tzdata \
+    tzdata
+
+# PHP in einem eigenen Schritt.
+# shortcut: Die PHP-Pakete kommen vorübergehend aus Alpine edge, weil 3.24 das
+# Sicherheitsrelease 8.4.28 noch nicht ausliefert. Sobald 3.24 es hat, die beiden
+# --repository-Zeilen entfernen. Bereits installierte Pakete aus 3.24 werden dabei
+# nicht ersetzt (apk add ohne --upgrade), aus edge kommen nur PHP und die
+# Bibliotheken, die noch fehlen.
+RUN apk add --no-cache \
+    --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main \
+    --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
+    php84 \
+    php84-fpm \
+    php84-pdo \
+    php84-pdo_mysql \
+    php84-curl \
+    php84-openssl \
     && ln -sf /usr/bin/php84 /usr/bin/php \
     && ln -sf /usr/sbin/php-fpm84 /usr/sbin/php-fpm \
     && php -r 'if (version_compare(PHP_VERSION, $argv[1], "<")) { fwrite(STDERR, "FEHLER: PHP " . PHP_VERSION . " ist aelter als die geforderte Mindestversion " . $argv[1] . " (Sicherheitsrelease, siehe CHANGELOG).\n"); exit(1); } echo "PHP " . PHP_VERSION . " erfuellt Mindestversion " . $argv[1] . "\n";' "$PHP_MIN_VERSION"

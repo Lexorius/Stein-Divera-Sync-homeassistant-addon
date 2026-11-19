@@ -208,7 +208,7 @@ Systemtabellen automatisch migriert.
   damit die Datenbankdateien in sich stimmig gesichert werden.
 - **Transport:** Verbindungen zu Divera und Stein.app erfolgen ausschließlich per `https` mit
   Zertifikatsprüfung, ohne Redirects.
-- **PHP:** 8.4.28 (Alpine 3.24), der Build bricht bei älteren Versionen ab. Multipart-Parsing,
+- **PHP:** 8.4.28 (vorübergehend aus Alpine edge, Basis Alpine 3.24), der Build bricht bei älteren Versionen ab. Multipart-Parsing,
   Datei-Uploads, `session.upload_progress`, `allow_url_fopen` und `expose_php` sind deaktiviert.
 - **Webserver:** Nur `/api.php` wird als PHP ausgeführt; `/config/`, `/src/` und `install.sql` sind
   gesperrt. Das Webroot ist für den Webserver-Prozess nur lesbar. Rate-Limit per nginx.
