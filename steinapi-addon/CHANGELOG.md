@@ -5,21 +5,35 @@ Alle wichtigen Änderungen an diesem Projekt werden in dieser Datei dokumentiert
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/),
 und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
 
-## [2.2.7] - 2026-11-19
+## [2.2.8] - noch nicht veröffentlicht
 
-**Sicherheitsrelease.** PHP 8.4.28, das Sicherheitsupdate von php.net vom 19.11.2026.
+**Sicherheitsrelease.** PHP 8.4.28, das Sicherheitsupdate von php.net vom 19.11.2026. Wird
+veröffentlicht, sobald Alpine 3.24 das Paket ausliefert.
 
 ### Sicherheit
 - **PHP auf 8.4.28 angehoben.** Der Build bricht ab, wenn Alpine eine ältere Version liefert.
-  Von den behobenen Lücken betreffen drei Bestandteile, die das Add-on nutzt:
-  - CVE-2026-129496 (Date): Use-after-free im Zeitzonen-Cache, kann zu Codeausführung führen.
-  - CVE-2026-129289 (FPM): Request-Smuggling über einen nicht gelesenen Request-Body.
-  - CVE-2026-129291 (FPM): Use-after-free in der epoll-Behandlung, lokale Rechteausweitung.
-- Die übrigen Lücken des Releases treffen Bestandteile, die im Image nicht enthalten oder nicht
-  eingeschaltet sind: php-cgi, DOM, Phar, SOAP, Session, die Statusseite von FPM und die
-  HTTP-Stream-Wrapper (`allow_url_fopen` ist aus). Session und DOM wurden mit 2.2.3 entfernt.
-- Einordnung: Das Add-on nimmt seit 2.2.2 nur Anfragen von Home Assistant Ingress und aus dem
-  Container selbst an. Ein Angreifer müsste also bereits in Home Assistant angemeldet sein.
+  Damit sind die Lücken behoben, für die 2.2.7 nur die Voraussetzungen entfernt hat:
+  CVE-2026-129496 (Date), CVE-2026-129289 und CVE-2026-129291 (php-fpm).
+- Die Einstellungen aus 2.2.7 bleiben bestehen.
+
+## [2.2.7] - 2026-11-19
+
+**Zwischenlösung zum PHP-Sicherheitsrelease vom 19.11.2026.** Alpine liefert PHP 8.4.28 noch
+nicht aus. Diese Version setzt die von PHP dokumentierten Zwischenlösungen, soweit sie das
+Add-on betreffen. Das eigentliche Update auf 8.4.28 folgt, sobald das Paket verfügbar ist.
+
+### Sicherheit
+- **CVE-2026-129291** (php-fpm, Use-after-free in der epoll-Behandlung): `catch_workers_output`
+  ist jetzt aus. Die Lücke setzt die eingeschaltete Option voraus. Fehler aus PHP stehen weiterhin
+  im Protokoll des Add-ons, sie kommen jetzt über den Webserver.
+- **CVE-2026-129289** (php-fpm, Request-Smuggling): Die Lücke setzt voraus, dass der Webserver
+  Verbindungen zu php-fpm offen hält. Das war nie der Fall und ist jetzt ausdrücklich festgelegt
+  (`fastcgi_keep_conn off`).
+- **CVE-2026-129496** (Date, Use-after-free im Zeitzonen-Cache): Die Lücke setzt ein PHP-Fehlerprotokoll
+  in einer Datei voraus. Seit 2.2.4 schreibt PHP nicht mehr in eine Datei.
+- Nicht betroffen, weil nicht im Image oder nicht eingeschaltet: php-cgi, DOM, Phar, SOAP,
+  Session, die Statusseite von php-fpm und die HTTP-Stream-Wrapper.
+- Die automatischen Tests prüfen alle diese Voraussetzungen am gebauten Image.
 
 ## [2.2.6] - 2026-11-17
 

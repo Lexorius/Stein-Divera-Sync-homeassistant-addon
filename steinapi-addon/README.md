@@ -1,6 +1,6 @@
 # SteinAPI Home Assistant Add-on
 
-![Version](https://img.shields.io/badge/version-2.2.7-blue)
+![Version](https://img.shields.io/badge/version-2.2.8-blue)
 ![Supports aarch64](https://img.shields.io/badge/aarch64-yes-green)
 ![Supports amd64](https://img.shields.io/badge/amd64-yes-green)
 ![PHP](https://img.shields.io/badge/PHP-8.4.28-777bb4)

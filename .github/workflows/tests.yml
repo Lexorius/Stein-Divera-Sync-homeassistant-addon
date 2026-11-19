@@ -83,6 +83,27 @@ jobs:
           docker exec steinapi nginx -t
           docker exec steinapi php-fpm -t
 
+      # Voraussetzungen der Lücken aus dem PHP-Sicherheitsrelease vom 19.11.2026
+      # dürfen im Image nicht erfüllt sein, unabhängig von der PHP-Version.
+      - name: Zwischenlösungen für die PHP-Lücken sind gesetzt
+        run: |
+          # CVE-2026-129291: catch_workers_output muss aus sein
+          docker exec steinapi php-fpm -tt 2>&1 | grep -E 'catch_workers_output = no'
+          # CVE-2026-129289: nginx hält die Verbindung zu php-fpm nicht offen
+          if docker exec steinapi nginx -T 2>/dev/null | grep -E 'fastcgi_keep_conn\s+on'; then exit 1; fi
+          # CVE-2026-129496: PHP schreibt Fehler nicht in eine Datei
+          test -z "$(docker exec steinapi php -r 'echo ini_get("error_log");')"
+          if docker exec steinapi php-fpm -tt 2>&1 | grep -F 'php_admin_value[error_log]'; then exit 1; fi
+          # CVE-2026-129292: keine Statusseite von php-fpm
+          if docker exec steinapi php-fpm -tt 2>&1 | grep -E 'pm\.status_path = /'; then exit 1; fi
+          # Session, DOM, Phar, SOAP und php-cgi sind nicht im Image
+          docker exec steinapi php -m | tr 'A-Z' 'a-z' > modules.txt
+          cat modules.txt | tr '\n' ' '
+          for m in session dom phar soap; do
+            if grep -qx "$m" modules.txt; then echo "Erweiterung $m ist installiert"; exit 1; fi
+          done
+          if docker exec steinapi sh -c 'command -v php-cgi84 || command -v php-cgi'; then exit 1; fi
+
       - name: Endpunkte antworten
         run: |
           code() { curl -s -o /dev/null -w '%{http_code}' "$1"; }

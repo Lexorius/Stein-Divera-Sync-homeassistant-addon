@@ -43,4 +43,4 @@ CREATE TABLE IF NOT EXISTS sync_state (
 
 -- Initial log entry
 INSERT INTO sync_logs (level, message, context) VALUES
-    ('info', 'SteinAPI initialized', '{"version": "2.2.7"}');
+    ('info', 'SteinAPI initialized', '{"version": "2.2.8"}');
